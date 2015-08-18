@@ -1,71 +1,63 @@
 import sockjs from 'sockjs-client';
 import WebSocketMultiplex from './WebSocketMultiplex.js';
-
+import Channel from './Channel.js';
 
 var uniqId =  function(){
 	return (((1 + Math.random()) * 0x10000) | 0).toString(16).substring(1).toUpperCase();
 };
 
-var ClientNexus,singleton;
+var singleton;
 
 
-function Channel(topic,multiplexer){
-	this.stream = multiplexer.channel(topic);
-	this.subscribers = {};
-	this.stream.onmessage = (msg) => {
-		Promise.all(this.subscribers.reduce( (accum,sub) => {
-			accum.push(new Promise(function(resolve,reject){
-				sub.onMessage && sub.onMessage.apply(sub.listener,[JSON.parse(msg.data)]);
-				resolve();
-			}));
-			return accum;
-		},[]));
-	};
+/**
+* @desc A client-side companion to `reflux-nexus` on the server. All actions will
+* be called on the main `NEXUS_CLIENT_ACTIONS` channel, ensuring the Server dispatch can
+* perform its delegation
+* @param {object} options
+* @param {string} [options.prefix=/reflux-nexus] - the root path to your websocket connection
+* #param {object} [options.sock] - a sockjs instance
+*/
+function ClientNexus(options){
 
-	this.stream.onclose = () => {
-		Promise.all(this.subscribers.reduce( (accum,sub) => {
-			accum.push(new Promise(function(resolve,reject){
-				sub.onClose && sub.onClose.apply(sub.listener);
-				resolve();
-			}));
-			return accum;
-		},[]));
-	};
+	options = options || {};
+
+	// use singleton to ensure only one ClientNexus
+	if(singleton) return singleton;
+
+	this.sock = options.sock || new sockjs(options.prefix || "/reflux-nexus");
+	this.connected = new Promise( (resolve) => {
+		if(this.sock.readyState > 0){
+			resolve();
+		} else {
+			this.sock.addEventListener("open",resolve);
+		}
+	});
+
+	this.multiplexer = new WebSocketMultiplex(this.sock);
+	this.action_channel = this.multiplexer.channel('CLIENT_NEXUS_ACTIONS');
+	singleton = this;
 }
 
-Channel.prototype = {
+/**
+* @name use
+* @static
+* @memberof ClientNexus
+* @desc Initialize a ClientNexus instance with a pre-existing sockjs instance
+* @param {object} sock - a sockjs instance
+* @returns {object} a ClientNexus
+*/
+ClientNexus.use = function(sock){
 
-	/**
-	* @name addListener
-	* @desc Add a handler to a Channel socket's `onmessage` event
-	* @method
-	* @memberof Channel
-	* @param {object} subscriber
-	* @param {function} subscriber.handler
-	* @param {object} subscriber.listener
-	* @returns {string} token - unique identifier for the registered subscriber
-	*/
-	addListener(subscriber){
-		var token = uniqId();
-		this.subscribers[token] = subscriber;
-		return token;
-	},
-
-	/**
-	* @name removeListener
-	* @method
-	* @desc Remove a handler from a Channel socket's `onmessage` event
-	* @memberof Channel
-	* @param {string} token
-	*/
-	removeListener (token){
-		this.subscribers[token] = null;
+	// use singleton to ensure only one ClientNexus
+	if(singleton){
+		singleton.sock = sock;
+		singleton.multiplexer = new WebSocketMultiplex(sock);
+		singleton.action_channel = singleton.multiplexer.channel('CLIENT_NEXUS_ACTIONS');
+		return singleton;
 	}
+	singleton =  new this({sock: sock});
+	return singleton;
 };
-
-
-
-
 
 /**
 * @name subscribe
@@ -75,14 +67,14 @@ Channel.prototype = {
 * `handler` is applied to the implementing object and called with one argument, the deserialized data from `onmessage`
 * @param {function} [onClose] - Function to call when the Channel's connection closes, bound to implementing object
 */
-function subsrcibe(channel,onMessage,onClose){
-	let {addListener,removeListener,name} = channel;
+function subscribe(channel,onMessage,onClose){
+	let {addListener,removeListener,topic} = channel;
 
-	if(!(channel instanceof Channel)){
+	if(!channel.__is_reflux_nexus_channel__){
 		return new Error('First argument passed to .tuneIn must a Client Nexus Channel.');
 	}
 
-	if( !this.subscriptions[name] ){
+	if( !this._nexusSubscriptions[topic] ){
 		let token = addListener({
 			onMessage: onMessage,
 			onClose: onClose,
@@ -92,43 +84,9 @@ function subsrcibe(channel,onMessage,onClose){
 	}
 }
 
-
-
-
-
 /**
-* @desc A client-side companion to `reflux-nexus` on the server. All actions will
-* be called on the main `NEXUS_CLIENT_ACTIONS` channel, ensuring the Server dispatch can
-* perform its delegation
-* @param {string} [prefix=/reflux-nexus] - the root path to your websocket connection
-*/
-function ClientNexus(prefix){
-	// use singleton to ensure only one ClientNexus
-	if(singleton) return singleton;
-	this.multiplexer = new WebSocketMultiplex( this.sock || new sockjs(prefix || '/reflux-nexus') );
-	this.action_channel = this.multiplexer.channel('CLIENT_NEXUS_ACTIONS');
-	singleton = this;
-}
-
-/**
-* @desc Initialize a ClientNexus instance with a pre-existing sockjs instance
-* @param {object} sock - a sockjs instance
-* @returns {object} a ClientNexus
-*/
-ClientNexus.use = function(sock){
-	// use singleton to ensure only one ClientNexus
-	if(singleton){
-		singleton.sock = sock;
-		singleton.multiplexer = new WebSocketMultiplex(sock);
-		singleton.action_channel = this.multiplexer.channel('CLIENT_NEXUS_ACTIONS');
-		return singleton;
-	}
-	this.prototype.sock = sock;
-	singleton =  new this();
-	return singleton;
-};
-
-/**
+* @name Connect
+* @static
 * @desc Convenience Mixin for a React Component, giving it a `tuneIn` method that
 * that allows the component to subscribe to a `ClientNexus.Channel` with a handler.
 * Conveniently removes all Component handlers from the Channel on `componentWillUnmount`
@@ -139,6 +97,7 @@ ClientNexus.Connect = {
 
 	componentWillMount(){
 		this._nexusTokens = [];
+		this._nexusSubscriptions = {};
 		this.tuneIn = subscribe.bind(this);
 	},
 
@@ -192,16 +151,19 @@ ClientNexus.prototype = {
 	* @constructor
 	* @desc Create a new channel to subscribe to data streams on
 	* @param {string} name - The channel's name
-	* @parem {object} multiplexer - The WebSocketMultiplex that will create channels
+	* @param {object} multiplexer - The WebSocketMultiplex that will create channels
 	*/
 	channel(topic){
 		let channels = this.multiplexer.channels;
+		let channel;
 		if(!channels[topic]) {
-			let channel = new Channel(topic, this.multiplexer);
-			this.action_channel.send(JSON.stringify({
-				actionType: "REGISTER_CLIENT_CHANNEL",
-				payload: {topic: topic}
-			}));
+			channel = new Channel(topic, this.multiplexer.channel(topic) );
+			this.connected.then( () => {
+				this.action_channel.send(JSON.stringify({
+					actionType: "REGISTER_CLIENT_CHANNEL",
+					payload: {topic: topic}
+				}));
+			});
 		}
 		return channels[topic];
 	}

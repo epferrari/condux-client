@@ -5,8 +5,10 @@
 	"main": "lib/Client.js",
 	"scripts": {
 		"test": "echo \"Error: no test specified\" && exit 1",
-		"clean":"rm -rf ./lib/*",
-		"predist":"npm run clean",
+		"lint": "eslint ./src --ext .js",
+		"preclean":"npm run lint",
+		"clean": "rm -rf ./lib/*",
+		"predist": "npm run clean",
 		"dist": "mkdir -p ./lib && babel ./src -d ./lib"
 	},
 	"repository": {
