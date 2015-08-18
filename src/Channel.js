@@ -1,3 +1,5 @@
+import {map,reduce} from '../vendor/lodash_custom.js';
+
 
 function Channel(topic,eventStream){
 	this.topic = topic;
@@ -6,23 +8,21 @@ function Channel(topic,eventStream){
 	this.__is_reflux_nexus_channel__ = true;
 
 	this.stream.onmessage = (msg) => {
-		Promise.all(this.subscribers.reduce( (accum,sub) => {
-			accum.push(new Promise(function(resolve,reject){
+		Promise.all(map(this.subscribers, sub => {
+			return new Promise(function(resolve,reject){
 				sub.onMessage && sub.onMessage.apply(sub.listener,[JSON.parse(msg.data)]);
 				resolve();
-			}));
-			return accum;
-		},[]));
+			});
+		}));
 	};
 
 	this.stream.onclose = () => {
-		Promise.all(this.subscribers.reduce( (accum,sub) => {
-			accum.push(new Promise(function(resolve,reject){
+		Promise.all(map(this.subscribers, sub => {
+			return new Promise(function(resolve,reject){
 				sub.onClose && sub.onClose.apply(sub.listener);
 				resolve();
-			}));
-			return accum;
-		},[]));
+			});
+		}));
 	};
 }
 
