@@ -9,8 +9,8 @@ var uniqId =  function(){
 var ClientNexus,singleton;
 
 
-function Channel(name,multiplexer){
-	this.stream = multiplexer.channel(name);
+function Channel(topic,multiplexer){
+	this.stream = multiplexer.channel(topic);
 	this.subscribers = {};
 	this.stream.onmessage = (msg) => {
 		Promise.all(this.subscribers.reduce( (accum,sub) => {
@@ -106,7 +106,7 @@ function ClientNexus(prefix){
 	// use singleton to ensure only one ClientNexus
 	if(singleton) return singleton;
 	this.multiplexer = new WebSocketMultiplex( this.sock || new sockjs(prefix || '/reflux-nexus') );
-	this.actionChannel = this.multiplexer.channel('CLIENT_NEXUS_ACTIONS');
+	this.action_channel = this.multiplexer.channel('CLIENT_NEXUS_ACTIONS');
 	singleton = this;
 }
 
@@ -120,7 +120,7 @@ ClientNexus.use = function(sock){
 	if(singleton){
 		singleton.sock = sock;
 		singleton.multiplexer = new WebSocketMultiplex(sock);
-		singleton.actionChannel = this.multiplexer.channel('CLIENT_NEXUS_ACTIONS');
+		singleton.action_channel = this.multiplexer.channel('CLIENT_NEXUS_ACTIONS');
 		return singleton;
 	}
 	this.prototype.sock = sock;
@@ -165,7 +165,7 @@ ClientNexus.prototype = {
 	* to be serialized and sent over the wire to the `ServerNexus`
 	*/
 	createAction(actionName){
-		return payload => this.actionChannel.send(JSON.stringify({
+		return payload => this.action_channel.send(JSON.stringify({
 			actionType: actionName,
 			payload: payload
 		}));
@@ -194,8 +194,16 @@ ClientNexus.prototype = {
 	* @param {string} name - The channel's name
 	* @parem {object} multiplexer - The WebSocketMultiplex that will create channels
 	*/
-	Channel(name){
-		return new Channel(name, this.multiplexer);
+	channel(topic){
+		let channels = this.multiplexer.channels;
+		if(!channels[topic]) {
+			let channel = new Channel(topic, this.multiplexer);
+			this.action_channel.send(JSON.stringify({
+				actionType: "REGISTER_CLIENT_CHANNEL",
+				payload: {topic: topic}
+			}));
+		}
+		return channels[topic];
 	}
 };
 
