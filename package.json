@@ -1,8 +1,8 @@
 {
 	"name": "reflux-nexus-client",
-	"version": "0.0.1",
+	"version": "0.0.2",
 	"description": "An over-the-wire implementation of Reflux using Sock.js with a mixin for React components. Sister package to `reflux-nexus`",
-	"main": "lib/Client.js",
+	"main": "reflux-nexus.client.js",
 	"scripts": {
 		"test": "echo \"Error: no test specified\" && exit 1",
 		"lint": "eslint ./src --ext .js",
