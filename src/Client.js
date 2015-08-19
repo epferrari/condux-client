@@ -100,7 +100,7 @@ function subscribe(frequency,onMessage,onClose){
 	let {addSubscriber,removeSubscriber,topic} = frequency;
 
 	if( !this._nexusSubscriptions[topic] ){
-		let token = addListener({
+		let token = addSubscriber({
 			onMessage: onMessage,
 			onClose: onClose,
 			listener: this
