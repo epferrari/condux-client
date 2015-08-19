@@ -1,10 +1,5 @@
 import sockjs from 'sockjs-client';
-import WebSocketMultiplex from './WebSocketMultiplex.js';
-import Channel from './Channel.js';
-
-var uniqId =  function(){
-	return (((1 + Math.random()) * 0x10000) | 0).toString(16).substring(1).toUpperCase();
-};
+import Frequency from './Frequency.js';
 
 var singleton;
 
@@ -15,7 +10,7 @@ var singleton;
 * perform its delegation
 * @param {object} options
 * @param {string} [options.prefix=/reflux-nexus] - the root path to your websocket connection
-* #param {object} [options.sock] - a sockjs instance
+* @param {object} [options.sock] - a sockjs instance
 */
 function ClientNexus(options){
 
@@ -25,6 +20,8 @@ function ClientNexus(options){
 	if(singleton) return singleton;
 
 	this.sock = options.sock || new sockjs(options.prefix || "/reflux-nexus");
+	this.spectrum = {};
+
 	this.connected = new Promise( (resolve) => {
 		if(this.sock.readyState > 0){
 			resolve();
@@ -33,31 +30,56 @@ function ClientNexus(options){
 		}
 	});
 
-	this.multiplexer = new WebSocketMultiplex(this.sock);
-	this.action_channel = this.multiplexer.channel('CLIENT_NEXUS_ACTIONS');
+	this.sock.addEventListener("message", e => {
+		var msg = e.data.split(","),
+				type = msg.shift(),
+				topic = msg.shift(),
+				payload = msg.join(),
+				frequency = this.spectrum[topic];
+
+		if(!frequency) return;
+
+		if(type === "uns"){
+			this.spectrum[topic] = null;
+			frequency.broadcast("close");
+		}else if(type === "msg"){
+			frequency.broadcast("message",{data:payload});
+		}
+	});
+
 	singleton = this;
 }
 
-/**
-* @name use
-* @static
-* @memberof ClientNexus
-* @desc Initialize a ClientNexus instance with a pre-existing sockjs instance
-* @param {object} sock - a sockjs instance
-* @returns {object} a ClientNexus
-*/
-ClientNexus.use = function(sock){
 
-	// use singleton to ensure only one ClientNexus
-	if(singleton){
-		singleton.sock = sock;
-		singleton.multiplexer = new WebSocketMultiplex(sock);
-		singleton.action_channel = singleton.multiplexer.channel('CLIENT_NEXUS_ACTIONS');
-		return singleton;
+
+
+/**
+* @name Connect
+* @static
+* @desc Convenience Mixin for a React Component, giving it a `tuneIn` method that
+* that allows the component to subscribe to a `ClientNexus Frequency` with a handler.
+* Conveniently removes all Component handlers from the Frequency on `componentWillUnmount`
+* @name Connect
+* @memberof ClientNexus
+*/
+ClientNexus.Connect = {
+	componentWillMount(){
+		this._nexusTokens = [];
+		this._nexusSubscriptions = {};
+		this._queuedSubscriptions = [];
+		this.tuneIn = (topic,onMessage,onClose) => {
+			this._queuedSubscriptions.push( attemptSubscription(this,topic,onMessage,onClose) );
+		};
+	},
+
+	componentWillUnmount(){
+		this._nexusTokens.forEach(disposer => disposer());
+		this._queuedSubscriptions.forEach(disposer => disposer());
 	}
-	singleton =  new this({sock: sock});
-	return singleton;
 };
+
+
+
 
 /**
 * @name subscribe
@@ -67,12 +89,13 @@ ClientNexus.use = function(sock){
 * `handler` is applied to the implementing object and called with one argument, the deserialized data from `onmessage`
 * @param {function} [onClose] - Function to call when the Channel's connection closes, bound to implementing object
 */
-function subscribe(channel,onMessage,onClose){
-	let {addListener,removeListener,topic} = channel;
+function subscribe(frequency,onMessage,onClose){
 
-	if(!channel.__is_reflux_nexus_channel__){
-		return new Error('First argument passed to .tuneIn must a Client Nexus Channel.');
+	if(!frequency || !frequency.__is_reflux_nexus_frequency__){
+		return new Error('First argument passed to .tuneIn must a Client Nexus Frequency.');
 	}
+
+	let {addSubscriber,removeSubscriber,topic} = frequency;
 
 	if( !this._nexusSubscriptions[topic] ){
 		let token = addListener({
@@ -80,33 +103,31 @@ function subscribe(channel,onMessage,onClose){
 			onClose: onClose,
 			listener: this
 		});
-		this._nexusTokens.push( removeListener.bind(channel,token) );
+		this._nexusTokens.push( removeSubscriber.bind(frequency,token) );
 	}
 }
 
-/**
-* @name Connect
-* @static
-* @desc Convenience Mixin for a React Component, giving it a `tuneIn` method that
-* that allows the component to subscribe to a `ClientNexus.Channel` with a handler.
-* Conveniently removes all Component handlers from the Channel on `componentWillUnmount`
-* @name Connect
-* @memberof ClientNexus
-*/
-ClientNexus.Connect = {
 
-	componentWillMount(){
-		this._nexusTokens = [];
-		this._nexusSubscriptions = {};
-		this.tuneIn = subscribe.bind(this);
-	},
+function attemptSubscription(subscriber,topic,onMessage,onClose){
+	if(!this.spectrum[topic]){
+		var queuedSub = (e) => {
+			var msg = e.data.split(','),
+					type = msg.shift(),
+					_topic = msg.shift();
 
-	componentWillUnmount(){
-		this._nexusTokens.forEach(disposer => disposer());
+			if(type === "sub" && _topic === topic){
+				subscribe.call(subscriber,this.spectrum[topic],onMessage,onClose);
+				this.sock.removeEventListener("message",queuedSub);
+			}
+		};
+
+		this.sock.addEventListener("message",queuedSub);
+		return () => this.sock.removeEventListener("message",queuedSub);
+	} else {
+		subscribe.call(subscriber,this.spectrum[topic],onMessage,onClose);
+		return () => {};
 	}
-};
-
-
+}
 
 
 
@@ -124,10 +145,19 @@ ClientNexus.prototype = {
 	* to be serialized and sent over the wire to the `ServerNexus`
 	*/
 	createAction(actionName){
-		return payload => this.action_channel.send(JSON.stringify({
-			actionType: actionName,
-			payload: payload
-		}));
+		return payload => {
+			return new Promise( (resolve,reject) => {
+				this.sock.send([
+					"msg",
+					"CLIENT_NEXUS_ACTIONS",
+					JSON.stringify({
+						actionType: actionName,
+						payload: payload
+					})
+				].join(","));
+				resolve();
+			});
+		};
 	},
 
 	/**
@@ -147,25 +177,30 @@ ClientNexus.prototype = {
 	},
 
 	/**
-	* @name Channel
-	* @constructor
-	* @desc Create a new channel to subscribe to data streams on
-	* @param {string} name - The channel's name
-	* @param {object} multiplexer - The WebSocketMultiplex that will create channels
+	* @name registerFrequency
+	* @desc Create a new Frequency to subscribe to data streams from
+	* @param {string} topic - The Frequency's name handle
 	*/
-	channel(topic){
-		let channels = this.multiplexer.channels;
-		let channel;
-		if(!channels[topic]) {
-			channel = new Channel(topic, this.multiplexer.channel(topic) );
+	registerFrequency(topic){
+		let spectrum = this.spectrum;
+		let freq;
+		if(!spectrum[topic]) {
+			spectrum[topic] = new Frequency(topic,this.sock);
 			this.connected.then( () => {
-				this.action_channel.send(JSON.stringify({
-					actionType: "REGISTER_CLIENT_CHANNEL",
-					payload: {topic: topic}
-				}));
+				return new Promise( (resolve,reject) => {
+					this.sock.send([
+						"msg",
+						"CLIENT_NEXUS_ACTIONS",
+						JSON.stringify({
+							actionType: "REGISTER_FREQUENCY",
+							payload: {topic: topic}
+						})
+					].join(","));
+					resolve();
+				});
 			});
 		}
-		return channels[topic];
+		return spectrum[topic];
 	}
 };
 
