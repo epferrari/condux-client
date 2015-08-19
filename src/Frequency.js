@@ -1,3 +1,9 @@
+/*
+* inspiration from https://github.com/sockjs/websocket-multiplex.git `multiplex_client`
+* tweaked to have unidirectional data flow back and forth across the wire
+*/
+
+
 import {map,reduce} from '../vendor/lodash_custom.js';
 
 var uniqId =  function(){
