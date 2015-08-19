@@ -47,8 +47,7 @@ function ClientNexus(options){
 		if(!frequency) return;
 
 		if(type === "uns"){
-			this.spectrum[topic] = null;
-			frequency.broadcast("close");
+			frequency.close();
 		} else if (type === "msg"){
 			frequency.broadcast("message",{data:payload});
 		}
@@ -174,7 +173,7 @@ ClientNexus.prototype = {
 	registerFrequency(topic){
 		let spectrum = this.spectrum;
 
-		if(!spectrum[topic]) {
+		if(!spectrum[topic] && topic != REGISTRATION_REQUESTS && topic != CLIENT_ACTIONS){
 
 			this.connected.then( () => {
 				return new Promise( (resolve,reject) => {
@@ -194,11 +193,12 @@ ClientNexus.prototype = {
 	attemptSubscription(subscriber,topic,onMessage,onClose){
 
 		if(!this.spectrum[topic]){
+			this.registerFrequency(topic);
 			var queuedSub = (e) => {
 				var msg = e.data.split(','),
 						type = msg.shift(),
 						channel = msg.shift(),
-						payload = msg.join();
+						payload = JSON.parse(msg.join(","));
 				if(type === "msg" && channel === REGISTRATION_REQUESTS && payload.topic === topic && payload.status === 'approved'){
 					subscribe.call(subscriber, this.spectrum[topic], onMessage, onClose);
 					pull(subscriber._queuedSubscriptions,queuedSub);

@@ -8,6 +8,7 @@ var uniqId =  function(){
 function Frequency(topic,nexus){
 	this.topic = topic;
 	this.socket = nexus.sock;
+	this.nexusSpectrum = nexus.spectrum;
 	this.subscribers = {};
 	this.__is_reflux_nexus_frequency__ = true;
 	nexus.connected.then(this.open.bind(this));
@@ -41,6 +42,7 @@ Frequency.prototype = {
 	},
 
 	onclose(){
+		delete this.nexusSpectrum[this.topic];
 		Promise.all(map(this.subscribers, sub => {
 			return new Promise(function(resolve,reject){
 				sub.onClose && sub.onClose.apply(sub.listener);
@@ -73,7 +75,8 @@ Frequency.prototype = {
 	* @param {string} token - the subscriber's unique identifier returned from `addSubscriber`
 	*/
 	removeSubscriber(token){
-		this.subscribers[token] = null;
+		delete this.subscribers[token];
+		if(!Object.keys(this.subscribers).length) this.close();
 	}
 };
 
