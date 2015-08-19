@@ -51,7 +51,9 @@ function ClientNexus(options){
 }
 
 
-
+ClientNexus.get = function get(){
+	return singleton;
+};
 
 /**
 * @name Connect
@@ -68,7 +70,7 @@ ClientNexus.Connect = {
 		this._nexusSubscriptions = {};
 		this._queuedSubscriptions = [];
 		this.tuneIn = (topic,onMessage,onClose) => {
-			this._queuedSubscriptions.push( attemptSubscription(this,topic,onMessage,onClose) );
+			this._queuedSubscriptions.push( ClientNexus.get().attemptSubscription(this,topic,onMessage,onClose) );
 		};
 	},
 
@@ -108,26 +110,7 @@ function subscribe(frequency,onMessage,onClose){
 }
 
 
-function attemptSubscription(subscriber,topic,onMessage,onClose){
-	if(!this.spectrum[topic]){
-		var queuedSub = (e) => {
-			var msg = e.data.split(','),
-					type = msg.shift(),
-					_topic = msg.shift();
 
-			if(type === "sub" && _topic === topic){
-				subscribe.call(subscriber,this.spectrum[topic],onMessage,onClose);
-				this.sock.removeEventListener("message",queuedSub);
-			}
-		};
-
-		this.sock.addEventListener("message",queuedSub);
-		return () => this.sock.removeEventListener("message",queuedSub);
-	} else {
-		subscribe.call(subscriber,this.spectrum[topic],onMessage,onClose);
-		return () => {};
-	}
-}
 
 
 
@@ -185,7 +168,7 @@ ClientNexus.prototype = {
 		let spectrum = this.spectrum;
 		let freq;
 		if(!spectrum[topic]) {
-			spectrum[topic] = new Frequency(topic,this.sock);
+			spectrum[topic] = new Frequency(topic,this);
 			this.connected.then( () => {
 				return new Promise( (resolve,reject) => {
 					this.sock.send([
@@ -201,6 +184,27 @@ ClientNexus.prototype = {
 			});
 		}
 		return spectrum[topic];
+	},
+
+	attemptSubscription(subscriber,topic,onMessage,onClose){
+		if(!this.spectrum[topic]){
+			var queuedSub = (e) => {
+				var msg = e.data.split(','),
+						type = msg.shift(),
+						_topic = msg.shift();
+
+				if(type === "sub" && _topic === topic){
+					subscribe.call(subscriber,this.spectrum[topic],onMessage,onClose);
+					this.sock.removeEventListener("message",queuedSub);
+				}
+			};
+
+			this.sock.addEventListener("message",queuedSub);
+			return () => this.sock.removeEventListener("message",queuedSub);
+		} else {
+			subscribe.call(subscriber,this.spectrum[topic],onMessage,onClose);
+			return () => {};
+		}
 	}
 };
 

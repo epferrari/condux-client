@@ -5,12 +5,12 @@ var uniqId =  function(){
 };
 
 
-function Frequency(topic,socket){
+function Frequency(topic,nexus){
 	this.topic = topic;
-	this.socket = socket;
+	this.socket = nexus.sock;
 	this.subscribers = {};
 	this.__is_reflux_nexus_frequency__ = true;
-	this.socket.connection.then(this.open);
+	nexus.connected.then(this.open);
 }
 
 Frequency.prototype = {
