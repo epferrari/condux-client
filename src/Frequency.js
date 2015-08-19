@@ -10,7 +10,7 @@ function Frequency(topic,nexus){
 	this.socket = nexus.sock;
 	this.subscribers = {};
 	this.__is_reflux_nexus_frequency__ = true;
-	nexus.connected.then(this.open);
+	nexus.connected.then(this.open.bind(this));
 }
 
 Frequency.prototype = {

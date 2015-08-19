@@ -42,7 +42,7 @@ function ClientNexus(options){
 		if(type === "uns"){
 			this.spectrum[topic] = null;
 			frequency.broadcast("close");
-		}else if(type === "msg"){
+		} else if (type === "msg"){
 			frequency.broadcast("message",{data:payload});
 		}
 	});
@@ -97,10 +97,10 @@ function subscribe(frequency,onMessage,onClose){
 		return new Error('First argument passed to .tuneIn must a Client Nexus Frequency.');
 	}
 
-	let {addSubscriber,removeSubscriber,topic} = frequency;
+	let {topic} = frequency;
 
 	if( !this._nexusSubscriptions[topic] ){
-		let token = addSubscriber({
+		let token = frequency.addSubscriber.call(frequency,{
 			onMessage: onMessage,
 			onClose: onClose,
 			listener: this
