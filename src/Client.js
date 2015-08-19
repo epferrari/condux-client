@@ -105,7 +105,7 @@ function subscribe(frequency,onMessage,onClose){
 			onClose: onClose,
 			listener: this
 		});
-		this._nexusTokens.push( removeSubscriber.bind(frequency,token) );
+		this._nexusTokens.push( frequency.removeSubscriber.bind(frequency,token) );
 	}
 }
 

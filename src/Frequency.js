@@ -27,7 +27,7 @@ Frequency.prototype = {
 
 	broadcast(eventType){
 		let handler = "on" + eventType;
-		let args = [].slice.call(this,1);
+		let args = [].slice.call(arguments,1);
 		if(this[handler]) this[handler].apply(this,args);
 	},
 
