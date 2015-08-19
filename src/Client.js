@@ -1,8 +1,10 @@
 import sockjs from 'sockjs-client';
 import Frequency from './Frequency.js';
+import {pull} from './vendor/lodash_custom.js';
 
 var singleton;
-
+var REGISTRATION_REQUESTS = "REGISTRATION_REQUESTS",
+		CLIENT_ACTIONS = "CLIENT_ACTIONS";
 
 /**
 * @desc A client-side companion to `reflux-nexus` on the server. All actions will
@@ -28,6 +30,11 @@ function ClientNexus(options){
 		} else {
 			this.sock.addEventListener("open",resolve);
 		}
+	});
+
+	this.connected.then( () => {
+		this.sock.send(["sub",CLIENT_ACTIONS].join(","));
+		this.sock.send(["sub",REGISTRATION_REQUESTS].join(","));
 	});
 
 	this.sock.addEventListener("message", e => {
@@ -70,13 +77,16 @@ ClientNexus.Connect = {
 		this._nexusSubscriptions = {};
 		this._queuedSubscriptions = [];
 		this.tuneIn = (topic,onMessage,onClose) => {
-			this._queuedSubscriptions.push( ClientNexus.get().attemptSubscription(this,topic,onMessage,onClose) );
+			ClientNexus.get().attemptSubscription(this,topic,onMessage,onClose);
 		};
 	},
 
 	componentWillUnmount(){
+		var sock = ClientNexus.get().sock;
 		this._nexusTokens.forEach(disposer => disposer());
-		this._queuedSubscriptions.forEach(disposer => disposer());
+		this._queuedSubscriptions.forEach( queuedSub => {
+			sock.removeEventListener("message",queuedSub);
+		});
 	}
 };
 
@@ -132,11 +142,8 @@ ClientNexus.prototype = {
 			return new Promise( (resolve,reject) => {
 				this.sock.send([
 					"msg",
-					"CLIENT_NEXUS_ACTIONS",
-					JSON.stringify({
-						actionType: actionName,
-						payload: payload
-					})
+					CLIENT_ACTIONS,
+					JSON.stringify({actionType: actionName,payload: payload})
 				].join(","));
 				resolve();
 			});
@@ -166,44 +173,42 @@ ClientNexus.prototype = {
 	*/
 	registerFrequency(topic){
 		let spectrum = this.spectrum;
-		let freq;
+
 		if(!spectrum[topic]) {
-			spectrum[topic] = new Frequency(topic,this);
+
 			this.connected.then( () => {
 				return new Promise( (resolve,reject) => {
 					this.sock.send([
 						"msg",
-						"CLIENT_NEXUS_ACTIONS",
-						JSON.stringify({
-							actionType: "REGISTER_FREQUENCY",
-							payload: {topic: topic}
-						})
+						REGISTRATION_REQUESTS,
+						JSON.stringify({topic: topic})
 					].join(","));
 					resolve();
 				});
 			});
+			spectrum[topic] = new Frequency(topic,this);
 		}
 		return spectrum[topic];
 	},
 
 	attemptSubscription(subscriber,topic,onMessage,onClose){
+
 		if(!this.spectrum[topic]){
 			var queuedSub = (e) => {
 				var msg = e.data.split(','),
 						type = msg.shift(),
-						_topic = msg.shift();
-
-				if(type === "sub" && _topic === topic){
-					subscribe.call(subscriber,this.spectrum[topic],onMessage,onClose);
-					this.sock.removeEventListener("message",queuedSub);
+						channel = msg.shift(),
+						payload = msg.join();
+				if(type === "msg" && channel === REGISTRATION_REQUESTS && payload.topic === topic && payload.status === 'approved'){
+					subscribe.call(subscriber, this.spectrum[topic], onMessage, onClose);
+					pull(subscriber._queuedSubscriptions,queuedSub);
+					this.sock.removeEventListener("message", queuedSub);
 				}
 			};
-
+			subscriber._queuedSubscriptions.push(queuedSub);
 			this.sock.addEventListener("message",queuedSub);
-			return () => this.sock.removeEventListener("message",queuedSub);
 		} else {
 			subscribe.call(subscriber,this.spectrum[topic],onMessage,onClose);
-			return () => {};
 		}
 	}
 };
