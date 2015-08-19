@@ -1,6 +1,6 @@
 import sockjs from 'sockjs-client';
 import Frequency from './Frequency.js';
-import {pull} from './vendor/lodash_custom.js';
+import {pull} from '../vendor/lodash_custom.js';
 
 var singleton;
 var REGISTRATION_REQUESTS = "REGISTRATION_REQUESTS",
