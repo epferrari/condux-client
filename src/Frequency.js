@@ -28,7 +28,7 @@ var typeOf = function(obj) {
 function Frequency(topic,nexus,options){
 
 	var datastream = {},
-			version = -1
+			version = -1,
 			history = [],
 			socket = nexus.sock,
 			defaults = {
