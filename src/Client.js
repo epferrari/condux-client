@@ -1,8 +1,12 @@
 import sockjs from 'sockjs-client';
 import Frequency from './Frequency.js';
-import {pull} from '../vendor/lodash_custom.js';
+import {pull,merge} from '../vendor/lodash_merge-map-reduce-pull-uniq.js';
 
-var singleton;
+var typeOf = function(obj) {
+	return ({}).toString.call(obj).match(/\s([a-zA-Z]+)/)[1].toLowerCase();
+};
+
+var Singleton;
 var REGISTRATION_REQUESTS = "REGISTRATION_REQUESTS",
 		CLIENT_ACTIONS = "CLIENT_ACTIONS";
 
@@ -10,19 +14,20 @@ var REGISTRATION_REQUESTS = "REGISTRATION_REQUESTS",
 * @desc A client-side companion to `reflux-nexus` on the server. All actions will
 * be called on the main `NEXUS_CLIENT_ACTIONS` channel, ensuring the Server dispatch can
 * perform its delegation
-* @param {object} options
+* @param {object} options - hash of options
 * @param {string} [options.prefix=/reflux-nexus] - the root path to your websocket connection
 * @param {object} [options.sock] - a sockjs instance
+* @constructor
 */
 function ClientNexus(options){
 
-	options = options || {};
+	options = merge({},{prefix: "/reflux-nexus"},options);
 
-	// use singleton to ensure only one ClientNexus
-	if(singleton) return singleton;
+	// use Singleton to ensure only one ClientNexus
+	if(Singleton) return Singleton;
 
 	this.sock = options.sock || new sockjs(options.prefix || "/reflux-nexus");
-	this.spectrum = {};
+	this.band = {};
 
 	this.connected = new Promise( (resolve) => {
 		if(this.sock.readyState > 0){
@@ -42,83 +47,27 @@ function ClientNexus(options){
 				type = msg.shift(),
 				topic = msg.shift(),
 				payload = msg.join(),
-				frequency = this.spectrum[topic];
+				frequency = this.band[topic];
 
 		if(!frequency) return;
 
-		if(type === "uns"){
-			frequency.close();
-		} else if (type === "msg"){
-			frequency.broadcast("message",{data:payload});
+		switch(type){
+			case "uns":
+				setTimeout( () => frequency.broadcast("close"),0 );
+				break;
+			case "conn":
+				setTimeout( () => frequency.broadcast("connection",{data:payload}),0 );
+				break;
+			case "msg":
+				setTimeout( () => frequency.broadcast("message",{data:payload}),0 );
+				break;
 		}
+
+		return;
 	});
 
-	singleton = this;
+	Singleton = this;
 }
-
-
-ClientNexus.get = function get(){
-	return singleton;
-};
-
-/**
-* @name Connect
-* @static
-* @desc Convenience Mixin for a React Component, giving it a `tuneIn` method that
-* that allows the component to subscribe to a `ClientNexus Frequency` with a handler.
-* Conveniently removes all Component handlers from the Frequency on `componentWillUnmount`
-* @name Connect
-* @memberof ClientNexus
-*/
-ClientNexus.Connect = {
-	componentWillMount(){
-		this._nexusTokens = [];
-		this._nexusSubscriptions = {};
-		this._queuedSubscriptions = [];
-		this.tuneIn = (topic,onMessage,onClose) => {
-			ClientNexus.get().attemptSubscription(this,topic,onMessage,onClose);
-		};
-	},
-
-	componentWillUnmount(){
-		var sock = ClientNexus.get().sock;
-		this._nexusTokens.forEach(disposer => disposer());
-		this._queuedSubscriptions.forEach( queuedSub => {
-			sock.removeEventListener("message",queuedSub);
-		});
-	}
-};
-
-
-
-
-/**
-* @name subscribe
-* @desc Helper function to subscribe the implementing object to a `Channel` with `handler`
-* @param {object} channel - The `ClientNexus.Channel` to subscribe to `onmessage` events
-* @param {function} onMessage - The function that will be called when `Channel`'s `onmessage` event is triggered.
-* `handler` is applied to the implementing object and called with one argument, the deserialized data from `onmessage`
-* @param {function} [onClose] - Function to call when the Channel's connection closes, bound to implementing object
-*/
-function subscribe(frequency,onMessage,onClose){
-
-	if(!frequency || !frequency.__is_reflux_nexus_frequency__){
-		return new Error('First argument passed to .tuneIn must a Client Nexus Frequency.');
-	}
-
-	let {topic} = frequency;
-
-	if( !this._nexusSubscriptions[topic] ){
-		let token = frequency.addSubscriber.call(frequency,{
-			onMessage: onMessage,
-			onClose: onClose,
-			listener: this
-		});
-		this._nexusTokens.push( frequency.removeSubscriber.bind(frequency,token) );
-	}
-}
-
-
 
 
 
@@ -169,11 +118,16 @@ ClientNexus.prototype = {
 	* @name registerFrequency
 	* @desc Create a new Frequency to subscribe to data streams from
 	* @param {string} topic - The Frequency's name handle
+	* @param {object} options - hash of options
+	* @param {boolean} [options.merge=false] - should the Frequency's `datastream` be merged or updated when new data arrives?
+	* @param {function} [options.mergeWith=Frequency.prototype.mergeStream] - handle the merging of new data into `datastream`
+	* @param {function} [options.updateWith=Frequency.prototype.updateStream] - handle the updating of new data to `datastream`
+	* @returns {object} A Frequency instance
 	*/
-	registerFrequency(topic){
-		let spectrum = this.spectrum;
+	registerFrequency(topic,options){
+		let frequency = this.band[topic];
 
-		if(!spectrum[topic] && topic != REGISTRATION_REQUESTS && topic != CLIENT_ACTIONS){
+		if(!frequency && topic != REGISTRATION_REQUESTS && topic != CLIENT_ACTIONS){
 
 			this.connected.then( () => {
 				return new Promise( (resolve,reject) => {
@@ -185,35 +139,132 @@ ClientNexus.prototype = {
 					resolve();
 				});
 			});
-			spectrum[topic] = new Frequency(topic,this);
+			this.band[topic] = frequency = new Frequency(topic,this,options);
 		}
-		return spectrum[topic];
-	},
-
-	attemptSubscription(subscriber,topic,onMessage,onClose){
-
-		if(!this.spectrum[topic]){
-			this.registerFrequency(topic);
-			var queuedSub = (e) => {
-				var msg = e.data.split(','),
-						type = msg.shift(),
-						channel = msg.shift(),
-						payload = JSON.parse(msg.join(","));
-				if(type === "msg" && channel === REGISTRATION_REQUESTS && payload.topic === topic && payload.status === 'approved'){
-					subscribe.call(subscriber, this.spectrum[topic], onMessage, onClose);
-					pull(subscriber._queuedSubscriptions,queuedSub);
-					this.sock.removeEventListener("message", queuedSub);
-				}
-			};
-			subscriber._queuedSubscriptions.push(queuedSub);
-			this.sock.addEventListener("message",queuedSub);
-		} else {
-			subscribe.call(subscriber,this.spectrum[topic],onMessage,onClose);
-		}
+		return frequency;
 	}
 };
 
 
+
+
+/**
+* @callback onConnection
+* @desc A callback for the ClientNexus.Connect mixin triggered when the component initially tunes into a Frequency
+* @param {object|array} hydration - the tuned-in Frequency's `datastream` when the component begins listening
+*/
+
+/**
+* @callback onMessage
+* @desc A callback for the ClientNexus.Connect mixin triggered when Frequency receives server data
+* @param {object|array} message - the tuned-in Frequency's latest message from the server
+* @param {object|array} datastream - a copy of the Frequency's full datastream
+*/
+
+/**
+* @callback onClose
+* @desc A callback for the ClientNexus.Connect mixin triggered when Frequency receives server data
+*/
+
+
+/**
+* @name Connect
+* @static
+* @desc Convenience Mixin for a React Component, giving it a `tuneIn` method that
+* that allows the component to subscribe to a `ClientNexus Frequency` with a handler.
+* Conveniently removes all Component handlers from the Frequency on `componentWillUnmount`
+* @name Connect
+* @memberof ClientNexus
+*/
+ClientNexus.Connect = {
+	componentWillMount(){
+		this._nexusTokens = [];
+		this._nexusSubscriptions = {};
+		this._queuedSubscriptions = [];
+		/**
+		* @name tuneInto
+		* @desc Tune into a ClientNexus `Frequency` and handle Frequency lifecyle events `connection`,`message`, and `close`
+		* @param {string} topic - a Frequency name handle
+		* @param {object} handlers - a hash of callbacks for Frequency's lifecycle events
+		* @param {onConnection} handlers.onConnection
+		* @param {onMessage} handlers.onMessage
+		* @param {onClose} handlers.onClose
+		*/
+		this.tuneInto = (topic,handlers) => {
+
+			let defaults = {
+				onConnection(){},
+				onMessage(){},
+				onClose(){}
+			};
+
+			handlers = merge({},defaults,handlers);
+			attemptListen.call(this,topic,handlers);
+		};
+	},
+
+	componentWillUnmount(){
+		var sock = Singleton.sock;
+		this._nexusTokens.forEach(disposer => disposer());
+		this._queuedSubscriptions.forEach( q => {
+			sock.removeEventListener("message",q);
+		});
+	}
+};
+
+/**
+* Helper for Connect mixin's `tuneInto` method
+* @param {string} topic - a Frequency name handle
+* @param {object} handlers - a hash of callbacks for Frequency's lifecycle events
+* @param {onConnection} handlers.onConnection
+* @param {onMessage} handlers.onMessage
+* @param {onClose} handlers.onClose
+*/
+function attemptListen(topic,handlers){
+
+	let frequency = Singleton.band[topic];
+
+	if(!frequency){
+		frequency = Singleton.registerFrequency(topic);
+		var queuedSub = function(e){
+			var msg = e.data.split(','),
+					type = msg.shift(),
+					channel = msg.shift(),
+					payload = JSON.parse(msg.join(","));
+			if(type === "msg" && channel === REGISTRATION_REQUESTS && payload.topic === topic && payload.status === 'approved'){
+
+				listenTo.call(this,frequency,handlers);
+				pull(this._queuedSubscriptions,queuedSub);
+				Singleton.sock.removeEventListener("message", queuedSub);
+			}
+		}.bind(this);
+		this._queuedSubscriptions.push(queuedSub);
+		Singleton.sock.addEventListener("message",queuedSub);
+	} else {
+		listenTo.call(this,frequency,handlers);
+	}
+}
+
+
+
+/**
+* @name listenTo
+* @desc Helper function to subscribe the implementing object to a `Frequency` with listener callbacks
+* @param {object} frequency - The `ClientNexus.Frequency` to being listened to
+* @param {object} handlers - a hash of callbacks for Frequency's lifecycle events
+* @param {onConnection} handlers.onConnection
+* @param {onMessage} handlers.onMessage
+* @param {onClose} handlers.onClose
+*/
+function listenTo(frequency,handlers){
+
+	let {topic} = frequency;
+	handlers.subject = this;
+	if( !this._nexusSubscriptions[topic] ){
+		let token = frequency.addListener.call(frequency,handlers);
+		this._nexusTokens.push( frequency.removeSubscriber.bind(frequency,token) );
+	}
+}
 
 
 

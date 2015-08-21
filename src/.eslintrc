@@ -1,6 +1,22 @@
 {
 	"parser":"babel-eslint",
 	"rules":{
-		"curly":0
+		"strict":2,
+		"curly":0,
+		"comma-dangle":2,
+		"no-extra-semi":2,
+		"no-inner-declarations":2,
+		"no-ex-assign":2,
+		"valid-jsdoc":0
+	},
+	"ecmaFeatures":{
+		"blockBindings":true,
+		"arrowFunctions":true,
+		"modules":true,
+		"objectLiteralShorthandProperties": true,
+		"objectLiteralShorthandMethods": true
+	},
+	"env":{
+		"browser":true
 	}
 }
