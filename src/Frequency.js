@@ -6,8 +6,12 @@
 
 import {map,reduce,merge,uniq} from '../vendor/lodash_merge-map-reduce-pull-uniq.js';
 
-var uniqId = function(){
+var random4 = function(){
 	return (((1 + Math.random()) * 0x10000) | 0).toString(16).substring(1).toUpperCase();
+};
+
+var uniqId = function(){
+	return random4() + random4() + random4();
 };
 
 var typeOf = function(obj) {
@@ -20,79 +24,31 @@ var typeOf = function(obj) {
 * @param {string} topic - name handle of the Frequency, ex `/chat`
 * @param {object} nexus - the ClientNexus instance that owns the Frequency
 * @param {object} options
-* @param {boolean} [options.merge=false] - should the Frequency's `datastream` be merged or updated when new data arrives?
-* @param {function} [options.mergeWith=Frequency.prototype.mergeStream] - handle the merging of new data into `datastream`
-* @param {function} [options.updateWith=Frequency.prototype.updateStream] - handle the updating of new data to `datastream`
+* @param {function} [options.hydrateWith=Frequency.prototype._hydrateData] - handle initial data flowing into `Data` on connection
+* @param {function} [options.updateWith=Frequency.prototype._updateData] - handle the updating `Data` from incoming message
 */
 
 function Frequency(topic,nexus,options){
 
-	var datastream = {},
-			version = -1,
+	var Data = {},
+			stream = [],
 			history = [],
 			socket = nexus.sock,
 			defaults = {
-				merge: false,
-				mergeWith: this.mergeStream.bind(this),
-				updateWith: this.updateStream.bind(this)
+				hydrateWith: Frequency.prototype._hydrateData.bind(this),
+				updateWith: Frequency.prototype._updateData.bind(this)
 			};
 
 	options = merge({},defaults,options);
 
-	this.topic = topic;
-	this.band = nexus.band;
 	this._listeners_ = {};
-	this.__is_reflux_nexus_frequency__ = true;
 
+	this.connected = new Promise( (resolve) => this.onconnected = resolve);
 	// get the state of Frequency's internal `datastream` at `index` in history.
 	// 0 is initial hydration from server
 	this.history = function(index){
-		return(history[index]);
+		return history[index];
 	};
-
-	// get the number of updates Frequency has received from the server
-	Object.defineProperty(this,'version',{
-		get function(){
-			return version;
-		},
-		enumerable: true,
-		configurable: false
-	});
-
-	// immutably get Frequency's internal datastream
-	Object.defineProperty(this,'datastream',{
-		get function(){
-			if(typeOf(datastream) === "array"){
-				return map(datastream, itm => itm);
-			} else if(typeOf(datastream) === "object"){
-				return merge({},datastream);
-			} else {
-				return datastream;
-			}
-		},
-		enumerable: true,
-		configurable: false
-	});
-
-	/**
-	* @name _handleStream_
-	* @desc Handle incoming data - overwrite or merge into `datastream`
-	* set with `options.merge`, false by default
-	* can also customize the merging and updating methods by setting them
-	* on construct as `options.mergeWith`/`options.updateWith`, default to the prototype methods if undefined
-	* @param {object|array} data - parsed JSON data message from server
-	*/
-	Object.defineProperty(this,"_handleStream_",{
-		value: function(newData){
-			history.push(datastream);
-			version++;
-			datastream = (options.merge ? options.mergeWith(datastream,newData) : options.updateWith(datastream,newData)) || datastream;
-		},
-		enumerable: false,
-		configurable: false,
-		writable: false
-	});
-
 	// unsubscribe from server updates onclose
 	// here instead of `this.onclose` to protect the socket from unauthorized sends
 	this.addListener({
@@ -101,6 +57,76 @@ function Frequency(topic,nexus,options){
 			socket.send( ["uns",this.topic].join(",") );
 		}
 	});
+
+	Object.defineProperties(this,{
+		"topic": { value: topic },
+		"band": { value: nexus.band },
+		"__is_reflux_nexus_frequency__": { value: true }
+	});
+
+	// get the number of updates Frequency has received from the server
+	Object.defineProperty(this,'version',{
+		get: function(){ return history.length -1; },
+		enumerable: true,
+		configurable: false
+	});
+
+	// immutably get Frequency's internal stream of messages
+	Object.defineProperty(this,'stream',{
+		get: function(){ return map(stream, itm => itm); },
+		enumerable: true,
+		configurable: false
+	});
+
+	Object.defineProperty(this,'Data',{
+		get: function(){
+			if(typeOf(Data) === 'object'){
+				return merge({},Data);
+			}
+			if(typeOf(Data) === 'array'){
+				return map(Data, itm => itm);
+			}
+			return Data;
+		},
+		enumerable: true,
+		configurable: false
+	});
+
+	/**
+	* @name _hydrate_
+	* @desc Handle initial data flowing to Frequency on connection.
+	* Define with options.hydrateWith, defaults to `Frequency.prototype._hydrateWith`
+	* @param {object|array} data - parsed JSON data message from server
+	*/
+	Object.defineProperty(this,"_hydrate_",{
+		value: function(msg){
+			history.unshift(Data);
+			stream.unshift(msg);
+			Data = options.hydrateWith(msg);
+		},
+		enumerable: false,
+		configurable: false,
+		writable: false
+	});
+
+	/**
+	* @name _update_
+	* @desc Handle incoming data - overwrite or merge into `datastream`
+	* can also customize the merging and updating methods by setting them
+	* on construct as `options.mergeWith`/`options.updateWith`, default to the prototype methods if undefined
+	* @param {any} new - parsed JSON data message from server
+	*/
+	Object.defineProperty(this,"_update_", {
+		value: function(msg) {
+			history.unshift(Data);
+			stream.unshift(msg);
+			Data = options.updateWith(this.Data,msg);
+		},
+		enumerable: false,
+		configurable: false,
+		writable: false
+	});
+
 
 	nexus.connected.then( () => {
 		socket.send( ["sub",this.topic].join(",") );
@@ -118,20 +144,21 @@ Frequency.prototype = {
 
 	onconnection(msg){
 		// update or merge with Frequency's data stream, depending on options set
-		this._handleStream_(JSON.parse(msg.data));
+		this._hydrate_(JSON.parse(msg.data));
+		setTimeout( () => this.broadcast('connected'),0 );
 	},
 
 	onmessage(msg){
 		let data = JSON.parse(msg.data);
 		// update or merge with Frequency's data stream, depending on options set
 		// datastream will hydrate listeners that tune in after the initial connection is made
-		this._handleStream_(data);
+		this._update_(data);
 		// push message data to Frequency's listeners' onMessage handler,
 		// first arg is the message data from server,
 		// second arg is the Frequency's cached datastream
 		Promise.all(map(this._listeners_, l => {
-			return new Promise(function(resolve,reject){
-				l.onMessage && l.onMessage.apply(l.subject,[data,this.datastream]);
+			return new Promise( (resolve,reject) => {
+				l.onMessage && l.onMessage.apply(l.subject,[data,this.Data]);
 				resolve();
 			});
 		}));
@@ -147,27 +174,21 @@ Frequency.prototype = {
 		}));
 	},
 
-	updateStream(newData){
-		return newData;
+	_hydrateData(initialData){
+		return initialData;
 	},
 
-	mergeStream(prevStream,newData){
-		var typeA = typeOf(prevStream);
-		var typeB = typeOf(newData);
-		if(typeA === typeB === "object"){
-			return merge({},prevStream,newData);
-		}
-		if(typeA === typeB === "array"){
-			return uniq(prevStream.concat(newData));
-		}
-		if(typeA === "array"){
-			return uniq(prevStream.push(newData));
-		}
-		if(typeA === "object"){
-			var obj = {};
-			obj[this.version] = newData;
-			return merge({},prevStream,obj);
-		}
+	/**
+	* @desc The Frequency will overwrite its Data with message data unless you
+	* define a custom `updateWith(prevData,message)` method by passing it as an
+	* option on construct. This default behavior is so that you could simply send
+	* an updated collection from your server and have the state maintained on the
+	* client with no additional steps.
+	* @param {object|array} prevData - the last Data state of the Frequency
+	* @param {any} message - sent from server on topic channel
+	*/
+	_updateData(prevData,message){
+		return message;
 	},
 
 	/**
@@ -186,7 +207,7 @@ Frequency.prototype = {
 		var token = uniqId();
 		var l = listener;
 		this._listeners_[token] = l;
-		l.onConnection && l.onConnection.call(l.subject,this.datastream);
+		this.connected.then( () => l.onConnection && l.onConnection.call(l.subject,this.Data,this.stream) );
 		return token;
 	},
 
@@ -199,9 +220,6 @@ Frequency.prototype = {
 	*/
 	removeListener(token){
 		delete this._listeners_[token];
-		// if the only listener left is Frequency's own onClose handler
-		// close the connection
-		if(Object.keys(this._listeners_).length >= 1) this.broadcast("close");
 	},
 
 	close(){

@@ -12,7 +12,7 @@ var REGISTRATION_REQUESTS = "REGISTRATION_REQUESTS",
 
 /**
 * @desc A client-side companion to `reflux-nexus` on the server. All actions will
-* be called on the main `NEXUS_CLIENT_ACTIONS` channel, ensuring the Server dispatch can
+* be called on the main `CLIENT_ACTIONS` channel, ensuring the Server dispatch can
 * perform its delegation
 * @param {object} options - hash of options
 * @param {string} [options.prefix=/reflux-nexus] - the root path to your websocket connection
@@ -212,6 +212,7 @@ ClientNexus.Connect = {
 	}
 };
 
+
 /**
 * Helper for Connect mixin's `tuneInto` method
 * @param {string} topic - a Frequency name handle
@@ -262,7 +263,7 @@ function listenTo(frequency,handlers){
 	handlers.subject = this;
 	if( !this._nexusSubscriptions[topic] ){
 		let token = frequency.addListener.call(frequency,handlers);
-		this._nexusTokens.push( frequency.removeSubscriber.bind(frequency,token) );
+		this._nexusTokens.push( frequency.removeListener.bind(frequency,token) );
 	}
 }
 
