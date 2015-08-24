@@ -1,4 +1,4 @@
-import sockjs from 'sockjs-client';
+//import sockjs from 'sockjs-client';
 import Frequency from './Frequency.js';
 import {pull,merge} from '../vendor/lodash_merge-map-reduce-pull-uniq.js';
 
@@ -13,20 +13,20 @@ var REGISTRATION_REQUESTS = "REGISTRATION_REQUESTS",
 /**
 * @desc A client-side companion to `reflux-nexus` on the server. All actions will
 * be called on the main `CLIENT_ACTIONS` channel, ensuring the Server dispatch can
-* perform its delegation
-* @param {object} options - hash of options
-* @param {string} [options.prefix=/reflux-nexus] - the root path to your websocket connection
-* @param {object} [options.sock] - a sockjs instance
+* perform its delegation.
+* @param {object} sock - a SockJS instance. Ensure that the prefix `http://yoururl.com{/prefix}` is `/reflux-nexus`
+* to connect to the `reflux-nexus` instance on your node server, or change the prefix on your server accordingly
 * @constructor
 */
-function ClientNexus(options){
-
-	options = merge({},{prefix: "/reflux-nexus"},options);
+function ClientNexus(sock){
 
 	// use Singleton to ensure only one ClientNexus
 	if(Singleton) return Singleton;
 
-	this.sock = options.sock || new sockjs(options.prefix || "/reflux-nexus");
+	//options = merge({},options);
+	//if(!/\/reflux-nexus$/.test(url)) url = url + "/reflux-nexus";
+	//this.sock = new sockjs(url,protocols,options);
+	this.sock = sock;
 	this.band = {};
 
 	this.connected = new Promise( (resolve) => {
