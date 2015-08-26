@@ -231,7 +231,7 @@ ClientNexus.Connect = {
 function listenToFrequency(frequency,handlers){
 
 	if(typeOf(frequency) === "string") frequency = Singleton.band(frequency);
-	if(!frequency || !frequency._is_reflux_nexus_frequency_){
+	if(!frequency || !frequency.__is_reflux_nexus_frequency__){
 		throw new TypeError('first argument to "tuneInto" must be instance of Frequency');
 	}
 
