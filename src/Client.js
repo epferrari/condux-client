@@ -1,14 +1,14 @@
 //import sockjs from 'sockjs-client';
 import Frequency from './Frequency.js';
-import {pull,merge} from '../vendor/lodash_merge-map-reduce-pull-uniq.js';
+import {pull,merge,each} from '../vendor/lodash_merge.pull.map.each.reduce.uniq.js';
 
 var typeOf = function(obj) {
 	return ({}).toString.call(obj).match(/\s([a-zA-Z]+)/)[1].toLowerCase();
 };
 
 var Singleton;
-var REGISTRATION_REQUESTS = "REGISTRATION_REQUESTS",
-		CLIENT_ACTIONS = "CLIENT_ACTIONS";
+var REGISTRATIONS = "/REGISTRATIONS",
+		CLIENT_ACTIONS = "/CLIENT_ACTIONS";
 
 /**
 * @desc A client-side companion to `reflux-nexus` on the server. All actions will
@@ -22,12 +22,10 @@ function ClientNexus(sock){
 
 	// use Singleton to ensure only one ClientNexus
 	if(Singleton) return Singleton;
-
-	//options = merge({},options);
-	//if(!/\/reflux-nexus$/.test(url)) url = url + "/reflux-nexus";
-	//this.sock = new sockjs(url,protocols,options);
 	this.sock = sock;
 	this.band = {};
+
+	var queue = [];
 
 	this.connected = new Promise( (resolve) => {
 		if(this.sock.readyState > 0){
@@ -38,8 +36,10 @@ function ClientNexus(sock){
 	});
 
 	this.connected.then( () => {
-		this.sock.send(["sub",CLIENT_ACTIONS].join(","));
-		this.sock.send(["sub",REGISTRATION_REQUESTS].join(","));
+		//this.sock.send(["sub",CLIENT_ACTIONS].join(","));
+		//this.sock.send(["sub",REGISTRATIONS].join(","));
+		this.joinAndSend("sub",CLIENT_ACTIONS);
+		this.joinAndSend("sub",REGISTRATIONS);
 	});
 
 	this.sock.addEventListener("message", e => {
@@ -51,6 +51,18 @@ function ClientNexus(sock){
 
 		if(!frequency) return;
 
+		if(topic === REGISTRATIONS){
+			// a channel was registered on the server after this Nexus subscribed to it
+			// resubscribe, and remove the topic from the queue
+			let payload = JSON.parse(payload);
+			let registeredTopic = payload.registered;
+			let queuePosition = queue.indexOf(registeredTopic);
+			if(queuePosition !== -1){
+				this.joinAndSend("sub",registeredTopic);
+				pull(queue,registeredTopic);
+			}
+		}
+
 		switch(type){
 			case "uns":
 				setTimeout( () => frequency.broadcast("close"),0 );
@@ -60,6 +72,13 @@ function ClientNexus(sock){
 				break;
 			case "msg":
 				setTimeout( () => frequency.broadcast("message",{data:payload}),0 );
+				break;
+			case "res":
+				setTimeout( () => frequency.broadcast("response",{data:payload}),0 );
+				break;
+			case "rej":
+				// channel is not registered with the server (yet), but might be later.
+				queue.push(topic);
 				break;
 		}
 
@@ -73,6 +92,11 @@ function ClientNexus(sock){
 
 
 ClientNexus.prototype = {
+
+	joinAndSend(){
+		var msgArray = [].slice.call(arguments,0);
+		this.sock.send(msgArray.join(','));
+	},
 
 	/**
 	* @name createAction
@@ -88,11 +112,9 @@ ClientNexus.prototype = {
 	createAction(actionName){
 		return payload => {
 			return new Promise( (resolve,reject) => {
-				this.sock.send([
-					"msg",
-					CLIENT_ACTIONS,
-					JSON.stringify({actionType: actionName,payload: payload})
-				].join(","));
+				let message = JSON.stringify({actionType: actionName,payload: payload});
+				//this.sock.send( ["msg",CLIENT_ACTIONS,message].join(',') );
+				this.joinAndSend("msg",CLIENT_ACTIONS,message);
 				resolve();
 			});
 		};
@@ -127,18 +149,7 @@ ClientNexus.prototype = {
 	registerFrequency(topic,options){
 		let frequency = this.band[topic];
 
-		if(!frequency && topic != REGISTRATION_REQUESTS && topic != CLIENT_ACTIONS){
-
-			this.connected.then( () => {
-				return new Promise( (resolve,reject) => {
-					this.sock.send([
-						"msg",
-						REGISTRATION_REQUESTS,
-						JSON.stringify({topic: topic})
-					].join(","));
-					resolve();
-				});
-			});
+		if(!frequency && (topic !== CLIENT_ACTIONS) && (topic !== REGISTRATIONS)){
 			this.band[topic] = frequency = new Frequency(topic,this,options);
 		}
 		return frequency;
@@ -178,19 +189,18 @@ ClientNexus.prototype = {
 */
 ClientNexus.Connect = {
 	componentWillMount(){
-		this._nexusTokens = [];
-		this._nexusSubscriptions = {};
-		this._queuedSubscriptions = [];
+		this._nexusTokens = {};
 		/**
 		* @name tuneInto
 		* @desc Tune into a ClientNexus `Frequency` and handle Frequency lifecyle events `connection`,`message`, and `close`
-		* @param {string} topic - a Frequency name handle
+		* @param {object} frequency - a Frequency name handle
 		* @param {object} handlers - a hash of callbacks for Frequency's lifecycle events
 		* @param {onConnection} handlers.onConnection
 		* @param {onMessage} handlers.onMessage
 		* @param {onClose} handlers.onClose
 		*/
-		this.tuneInto = (topic,handlers) => {
+		this.tuneInto = (frequency,handlers) => {
+
 
 			let defaults = {
 				onConnection(){},
@@ -199,57 +209,18 @@ ClientNexus.Connect = {
 			};
 
 			handlers = merge({},defaults,handlers);
-			attemptListen.call(this,topic,handlers);
+			listenToFrequency.call(this,frequency,handlers);
 		};
 	},
 
 	componentWillUnmount(){
-		var sock = Singleton.sock;
-		this._nexusTokens.forEach(disposer => disposer());
-		this._queuedSubscriptions.forEach( q => {
-			sock.removeEventListener("message",q);
-		});
+		each(this._nexusTokens, disposer => disposer());
 	}
 };
 
 
 /**
-* Helper for Connect mixin's `tuneInto` method
-* @param {string} topic - a Frequency name handle
-* @param {object} handlers - a hash of callbacks for Frequency's lifecycle events
-* @param {onConnection} handlers.onConnection
-* @param {onMessage} handlers.onMessage
-* @param {onClose} handlers.onClose
-*/
-function attemptListen(topic,handlers){
-
-	let frequency = Singleton.band[topic];
-
-	if(!frequency){
-		frequency = Singleton.registerFrequency(topic);
-		var queuedSub = function(e){
-			var msg = e.data.split(','),
-					type = msg.shift(),
-					channel = msg.shift(),
-					payload = JSON.parse(msg.join(","));
-			if(type === "msg" && channel === REGISTRATION_REQUESTS && payload.topic === topic && payload.status === 'approved'){
-
-				listenTo.call(this,frequency,handlers);
-				pull(this._queuedSubscriptions,queuedSub);
-				Singleton.sock.removeEventListener("message", queuedSub);
-			}
-		}.bind(this);
-		this._queuedSubscriptions.push(queuedSub);
-		Singleton.sock.addEventListener("message",queuedSub);
-	} else {
-		listenTo.call(this,frequency,handlers);
-	}
-}
-
-
-
-/**
-* @name listenTo
+* @name listenToFrequency
 * @desc Helper function to subscribe the implementing object to a `Frequency` with listener callbacks
 * @param {object} frequency - The `ClientNexus.Frequency` to being listened to
 * @param {object} handlers - a hash of callbacks for Frequency's lifecycle events
@@ -257,13 +228,18 @@ function attemptListen(topic,handlers){
 * @param {onMessage} handlers.onMessage
 * @param {onClose} handlers.onClose
 */
-function listenTo(frequency,handlers){
+function listenToFrequency(frequency,handlers){
 
+	if(typeOf(frequency) === "string") frequency = Singleton.band(frequency);
+	if(!frequency || !frequency._is_reflux_nexus_frequency_){
+		throw new TypeError('first argument to "tuneInto" must be instance of Frequency');
+	}
+	
 	let {topic} = frequency;
 	handlers.subject = this;
-	if( !this._nexusSubscriptions[topic] ){
+	if( !this._nexusTokens[topic] ){
 		let token = frequency.addListener.call(frequency,handlers);
-		this._nexusTokens.push( frequency.removeListener.bind(frequency,token) );
+		this._nexusTokens[topic] = frequency.removeListener.bind(frequency,token);
 	}
 }
 

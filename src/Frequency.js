@@ -4,7 +4,7 @@
 */
 
 
-import {map,reduce,merge,uniq} from '../vendor/lodash_merge-map-reduce-pull-uniq.js';
+import {map,reduce,merge,uniq} from '../vendor/lodash_merge.pull.map.each.reduce.uniq.js';
 
 var random4 = function(){
 	return (((1 + Math.random()) * 0x10000) | 0).toString(16).substring(1).toUpperCase();
@@ -33,7 +33,6 @@ function Frequency(topic,nexus,options){
 	var Data = {},
 			stream = [],
 			history = [],
-			socket = nexus.sock,
 			defaults = {
 				hydrateWith: Frequency.prototype._hydrateData.bind(this),
 				updateWith: Frequency.prototype._updateData.bind(this)
@@ -54,7 +53,7 @@ function Frequency(topic,nexus,options){
 	this.addListener({
 		subject: this,
 		onClose: function(){
-			socket.send( ["uns",this.topic].join(",") );
+			nexus.joinAndSend("uns",this.topic);
 		}
 	});
 
@@ -129,9 +128,14 @@ function Frequency(topic,nexus,options){
 
 
 	nexus.connected.then( () => {
-		socket.send( ["sub",this.topic].join(",") );
+		nexus.joinAndSend("sub",this.topic);
 		setTimeout( () => this.broadcast("open"),0 );
 	});
+
+	this.request = function(constraints){
+		constraints = JSON.stringify(constraints);
+		nexus.joinAndSend("req",this.topic,constraints);
+	};
 }
 
 Frequency.prototype = {
