@@ -132,7 +132,7 @@ function Frequency(topic,nexus,options){
 		setTimeout( () => this.broadcast("open"),0 );
 	});
 
-	this.request = function(constraints){
+	this.request = (constraints) => {
 		constraints = JSON.stringify(constraints);
 		nexus.joinAndSend("req",this.topic,constraints);
 	};
@@ -146,14 +146,13 @@ Frequency.prototype = {
 		if(this[handler]) this[handler].apply(this,args);
 	},
 
-	onconnection(msg){
+	onconnection(data){
 		// update or merge with Frequency's data stream, depending on options set
-		this._hydrate_(JSON.parse(msg.data));
+		this._hydrate_(data);
 		setTimeout( () => this.broadcast('connected'),0 );
 	},
 
-	onmessage(msg){
-		let data = JSON.parse(msg.data);
+	onmessage(data){
 		// update or merge with Frequency's data stream, depending on options set
 		// datastream will hydrate listeners that tune in after the initial connection is made
 		this._update_(data);

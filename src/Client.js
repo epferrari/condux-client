@@ -68,13 +68,13 @@ function ClientNexus(sock){
 				setTimeout( () => frequency.broadcast("close"),0 );
 				break;
 			case "conn":
-				setTimeout( () => frequency.broadcast("connection",{data:payload}),0 );
+				setTimeout( () => frequency.broadcast("connection",JSON.parse(payload)),0 );
 				break;
 			case "msg":
-				setTimeout( () => frequency.broadcast("message",{data:payload}),0 );
+				setTimeout( () => frequency.broadcast("message",JSON.parse(payload)),0 );
 				break;
 			case "res":
-				setTimeout( () => frequency.broadcast("response",{data:payload}),0 );
+				setTimeout( () => frequency.broadcast("response",JSON.parse(payload)),0 );
 				break;
 			case "rej":
 				// channel is not registered with the server (yet), but might be later.
@@ -234,7 +234,7 @@ function listenToFrequency(frequency,handlers){
 	if(!frequency || !frequency._is_reflux_nexus_frequency_){
 		throw new TypeError('first argument to "tuneInto" must be instance of Frequency');
 	}
-	
+
 	let {topic} = frequency;
 	handlers.subject = this;
 	if( !this._nexusTokens[topic] ){
