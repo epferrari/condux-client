@@ -62,19 +62,24 @@ function ClientNexus(sock){
 				pull(queue,registeredTopic);
 			}
 		}
-
+		try{
+			payload = JSON.parse(payload);
+		} catch(e){
+			let x = e;
+			payload = {};
+		}
 		switch(type){
 			case "uns":
 				setTimeout( () => frequency.broadcast("close"),0 );
 				break;
 			case "conn":
-				setTimeout( () => frequency.broadcast("connection",JSON.parse(payload)),0 );
+				setTimeout( () => frequency.broadcast("connection",payload),0 );
 				break;
 			case "msg":
-				setTimeout( () => frequency.broadcast("message",JSON.parse(payload)),0 );
+				setTimeout( () => frequency.broadcast("message",payload),0 );
 				break;
 			case "res":
-				setTimeout( () => frequency.broadcast("response",JSON.parse(payload)),0 );
+				setTimeout( () => frequency.broadcast("response",payload),0 );
 				break;
 			case "rej":
 				// channel is not registered with the server (yet), but might be later.
