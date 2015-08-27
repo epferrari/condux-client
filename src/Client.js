@@ -22,27 +22,36 @@ function ClientNexus(sock){
 
 	// use Singleton to ensure only one ClientNexus
 	if(Singleton) return Singleton;
-	this.sock = sock;
-	this.band = {};
 
+	var connected = false;
 	var queue = [];
 
-	this.connected = new Promise( (resolve) => {
-		if(this.sock.readyState > 0){
+	this.sock = sock;
+	this.band = {};
+	this.isConnected = () => connected;
+
+	this.didConnect = new Promise( (resolve) => {
+		if(sock.readyState > 0){
 			resolve();
+			connected = true;
 		} else {
-			this.sock.addEventListener("open",resolve);
+			sock.addEventListener("open",() => {
+				connected = true;
+				resolve();
+			});
 		}
 	});
 
-	this.connected.then( () => {
-		//this.sock.send(["sub",CLIENT_ACTIONS].join(","));
-		//this.sock.send(["sub",REGISTRATIONS].join(","));
+	this.didConnect.then( () => {
 		this.joinAndSend("sub",CLIENT_ACTIONS);
 		this.joinAndSend("sub",REGISTRATIONS);
 	});
 
-	this.sock.addEventListener("message", e => {
+	sock.addEventListener("close", e => {
+		connected = false;
+	});
+
+	sock.addEventListener("message", e => {
 		var msg = e.data.split(","),
 				type = msg.shift(),
 				topic = msg.shift(),
@@ -118,7 +127,6 @@ ClientNexus.prototype = {
 		return payload => {
 			return new Promise( (resolve,reject) => {
 				let message = JSON.stringify({actionType: actionName,payload: payload});
-				//this.sock.send( ["msg",CLIENT_ACTIONS,message].join(',') );
 				this.joinAndSend("msg",CLIENT_ACTIONS,message);
 				resolve();
 			});
@@ -241,7 +249,7 @@ function listenToFrequency(frequency,handlers){
 	}
 
 	let {topic} = frequency;
-	handlers.subject = this;
+	handlers.sub = this;
 	if( !this._nexusTokens[topic] ){
 		let token = frequency.addListener.call(frequency,handlers);
 		this._nexusTokens[topic] = frequency.removeListener.bind(frequency,token);

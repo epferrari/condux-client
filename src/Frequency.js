@@ -42,7 +42,7 @@ function Frequency(topic,nexus,options){
 
 	this._listeners_ = {};
 
-	this.connected = new Promise( (resolve) => this.onconnected = resolve);
+	this.didConnect = new Promise( (resolve) => this.onconnected = resolve);
 	// get the state of Frequency's internal `datastream` at `index` in history.
 	// 0 is initial hydration from server
 	this.history = function(index){
@@ -51,7 +51,7 @@ function Frequency(topic,nexus,options){
 	// unsubscribe from server updates onclose
 	// here instead of `this.onclose` to protect the socket from unauthorized sends
 	this.addListener({
-		subject: this,
+		sub: this,
 		onClose: function(){
 			nexus.joinAndSend("uns",this.topic);
 		}
@@ -127,14 +127,17 @@ function Frequency(topic,nexus,options){
 	});
 
 
-	nexus.connected.then( () => {
+	nexus.didConnect.then( () => {
 		nexus.joinAndSend("sub",this.topic);
 		setTimeout( () => this.broadcast("open"),0 );
 	});
 
 	this.request = (constraints) => {
-		constraints = JSON.stringify(constraints);
-		nexus.joinAndSend("req",this.topic,constraints);
+		return new Promise( (resolve,reject) => {
+			this.onresponse = (responseData) => resolve(responseData);
+			constraints = JSON.stringify(constraints);
+			nexus.joinAndSend("req",this.topic,constraints);
+		});
 	};
 }
 
@@ -152,16 +155,16 @@ Frequency.prototype = {
 		setTimeout( () => this.broadcast('connected'),0 );
 	},
 
-	onmessage(data){
+	onmessage(msg){
 		// update or merge with Frequency's data stream, depending on options set
 		// datastream will hydrate listeners that tune in after the initial connection is made
-		this._update_(data);
+		this._update_(msg);
 		// push message data to Frequency's listeners' onMessage handler,
 		// first arg is the message data from server,
 		// second arg is the Frequency's cached datastream
 		Promise.all(map(this._listeners_, l => {
 			return new Promise( (resolve,reject) => {
-				l.onMessage && l.onMessage.apply(l.subject,[data,this.Data]);
+				l.onMessage && l.onMessage.apply(l.sub,[msg,this.Data]);
 				resolve();
 			});
 		}));
@@ -171,7 +174,7 @@ Frequency.prototype = {
 		delete this.band[this.topic]
 		Promise.all(map(this._listeners_, l => {
 			return new Promise(function(resolve,reject){
-				l.onClose && l.onClose.apply(l.subject);
+				l.onClose && l.onClose.apply(l.sub);
 				resolve();
 			});
 		}));
@@ -210,7 +213,7 @@ Frequency.prototype = {
 		var token = uniqId();
 		var l = listener;
 		this._listeners_[token] = l;
-		this.connected.then( () => l.onConnection && l.onConnection.call(l.subject,this.Data,this.stream) );
+		this.didConnect.then( () => l.onConnection && l.onConnection.call(l.sub,this.Data,this.stream) );
 		return token;
 	},
 
