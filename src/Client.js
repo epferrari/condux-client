@@ -140,7 +140,7 @@ ClientNexus.prototype = {
 	*/
 	joinAndSend(){
 		var msgArray = [].slice.call(arguments,0);
-		this.sock.send(msgArray.join(','));
+		this.didConnect.then( () => this.sock.send(msgArray.join(',')) );
 	},
 
 	/**
