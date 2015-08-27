@@ -27,7 +27,7 @@ function ClientNexus(sock){
 	this.sock = sock;
 	this.band = {};
 	this.connect(sock);
-	sock.addEventListener( "message",() => this._multiplex(e));
+	sock.addEventListener( "message", e => this._multiplex(e));
 
 	Singleton = this;
 }
@@ -77,7 +77,7 @@ ClientNexus.prototype = {
 		});
 
 		// reapply the message handling multiplexer
-		sock.addEventListener("message",() => this._multiplex(e));
+		sock.addEventListener("message",e => this._multiplex(e));
 	},
 
 	/**
