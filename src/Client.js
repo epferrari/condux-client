@@ -23,35 +23,70 @@ function ClientNexus(sock){
 	// use Singleton to ensure only one ClientNexus
 	if(Singleton) return Singleton;
 
-	var connected = false;
-	var queue = [];
-
+	this._queue = [];
 	this.sock = sock;
 	this.band = {};
-	this.isConnected = () => connected;
+	this.connect(sock);
+	sock.addEventListener( "message",this._multiplex);
 
-	this.didConnect = new Promise( (resolve) => {
-		if(sock.readyState > 0){
-			resolve();
-			connected = true;
-		} else {
-			sock.addEventListener("open",() => {
-				connected = true;
+	Singleton = this;
+}
+
+
+
+
+ClientNexus.prototype = {
+
+	/**
+	* @desc Set up frequency multiplexing
+	* @param {object} sock - A SockJS instance
+	*/
+	connect(sock){
+		this.sock = sock;
+		this.isConnected = () => (sock.readyState === 1);
+
+		this.didConnect = new Promise( (resolve) => {
+			if(sock.readyState > 0){
 				resolve();
+			} else {
+				sock.addEventListener("open",resolve);
+			}
+		});
+
+		this.didConnect.then( () => {
+			this.joinAndSend("sub",CLIENT_ACTIONS);
+			this.joinAndSend("sub",REGISTRATIONS);
+		});
+	},
+
+	/**
+	* @desc Set up frequency multiplexing after a disconnect with existing frequencies
+	* @param {object} sock - A SockJS instance
+	*/
+	reconnect(sock){
+		// rebind to new sock
+		this.connect(sock);
+
+		// resubscribe the frequencies
+		each(this.band, (fq) => {
+			fq.didConnect = new Promise( (resolve) => fq.onconnected = resolve);
+			this.didConnect.then( () => {
+				this.joinAndSend("sub",fq.topic);
+				setTimeout( () => fq.broadcast("open"),0 );
 			});
-		}
-	});
+		});
 
-	this.didConnect.then( () => {
-		this.joinAndSend("sub",CLIENT_ACTIONS);
-		this.joinAndSend("sub",REGISTRATIONS);
-	});
+		// reapply the message handling multiplexer
+		sock.addEventListener("message",this._multiplex);
+	},
 
-	sock.addEventListener("close", e => {
-		connected = false;
-	});
-
-	sock.addEventListener("message", e => {
+	/**
+	* @desc Handle messages from the ServerNexus on different channels by sending
+	* them to the appropriate frequency
+	* @param {object} e - the event object passed from `<SockJS>.addEventLister`
+	*/
+	_multiplex(e){
+		var queue = this._queue;
 		var msg = e.data.split(","),
 				type = msg.shift(),
 				topic = msg.shift(),
@@ -71,12 +106,13 @@ function ClientNexus(sock){
 				pull(queue,registeredTopic);
 			}
 		}
-		try{
-			payload = JSON.parse(payload);
-		} catch(e){
+
+		try{ payload = JSON.parse(payload); }
+		catch(e){
 			let x = e;
 			payload = {};
 		}
+
 		switch(type){
 			case "uns":
 				setTimeout( () => frequency.broadcast("close"),0 );
@@ -97,16 +133,11 @@ function ClientNexus(sock){
 		}
 
 		return;
-	});
+	},
 
-	Singleton = this;
-}
-
-
-
-
-ClientNexus.prototype = {
-
+	/**
+	* @desc Format type, topic, and data to send to ServerNexus
+	*/
 	joinAndSend(){
 		var msgArray = [].slice.call(arguments,0);
 		this.sock.send(msgArray.join(','));

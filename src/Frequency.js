@@ -43,6 +43,7 @@ function Frequency(topic,nexus,options){
 	this._listeners_ = {};
 
 	this.didConnect = new Promise( (resolve) => this.onconnected = resolve);
+
 	// get the state of Frequency's internal `datastream` at `index` in history.
 	// 0 is initial hydration from server
 	this.history = function(index){
@@ -64,8 +65,8 @@ function Frequency(topic,nexus,options){
 	});
 
 	// get the number of updates Frequency has received from the server
-	Object.defineProperty(this,'version',{
-		get: function(){ return history.length -1; },
+	Object.defineProperty(this,'count',{
+		get: function(){ return history.length - 1; },
 		enumerable: true,
 		configurable: false
 	});
@@ -77,6 +78,7 @@ function Frequency(topic,nexus,options){
 		configurable: false
 	});
 
+	// return immutable Data
 	Object.defineProperty(this,'Data',{
 		get: function(){
 			if(typeOf(Data) === 'object'){
@@ -129,6 +131,7 @@ function Frequency(topic,nexus,options){
 
 	nexus.didConnect.then( () => {
 		nexus.joinAndSend("sub",this.topic);
+		// onopen serves no purpose currently 
 		setTimeout( () => this.broadcast("open"),0 );
 	});
 
