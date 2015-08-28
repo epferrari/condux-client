@@ -24,8 +24,8 @@ var typeOf = function(obj) {
 * @param {string} topic - name handle of the Frequency, ex `/chat`
 * @param {object} nexus - the ClientNexus instance that owns the Frequency
 * @param {object} options
-* @param {function} [options.hydrateWith=Frequency.prototype._hydrateData] - handle initial data flowing into `Data` on connection
-* @param {function} [options.updateWith=Frequency.prototype._updateData] - handle the updating `Data` from incoming message
+* @param {function} [options.onConnection=Frequency.prototype._hydrateData] - handle initial data flowing into `Data` on connection
+* @param {function} [options.onMessage=Frequency.prototype._updateData] - handle the updating `Data` from incoming message
 */
 
 function Frequency(topic,nexus,options){
@@ -34,8 +34,8 @@ function Frequency(topic,nexus,options){
 			stream = [],
 			history = [],
 			defaults = {
-				hydrateWith: Frequency.prototype._hydrateData.bind(this),
-				updateWith: Frequency.prototype._updateData.bind(this)
+				handleConnection: Frequency.prototype._hydrateData.bind(this),
+				handleMessage: Frequency.prototype._updateData.bind(this)
 			};
 
 	options = merge({},defaults,options);
@@ -97,14 +97,16 @@ function Frequency(topic,nexus,options){
 	/**
 	* @name _hydrate_
 	* @desc Handle initial data flowing to Frequency on connection.
-	* Define with options.hydrateWith, defaults to `Frequency.prototype._hydrateWith`
+	* Define with options.handleConnection, defaults to `Frequency.prototype._hydrateWith`
+	* In most cases you should define a custom method for handling data hydration
+	* using `options.handleConnection` when you register the frequency.
 	* @param {object|array} data - parsed JSON data message from server
 	*/
 	Object.defineProperty(this,"_hydrate_",{
 		value: function(msg){
 			history.unshift(Data);
 			stream.unshift(msg);
-			Data = options.hydrateWith(msg);
+			Data = options.handleConnection(msg);
 		},
 		enumerable: false,
 		configurable: false,
@@ -114,15 +116,17 @@ function Frequency(topic,nexus,options){
 	/**
 	* @name _update_
 	* @desc Handle incoming data - overwrite or merge into `datastream`
-	* can also customize the merging and updating methods by setting them
-	* on construct as `options.mergeWith`/`options.updateWith`, default to the prototype methods if undefined
+	* using `options.handleMessage` if defined or prototype method `_updateData`,
+	* which just overwrites the Data object with whatever streamed in.
+	* In most cases you should define a custom method for handling messages
+	* using `options.handleMessage` when you register the frequency.
 	* @param {any} new - parsed JSON data message from server
 	*/
 	Object.defineProperty(this,"_update_", {
 		value: function(msg) {
 			history.unshift(Data);
 			stream.unshift(msg);
-			Data = options.updateWith(this.Data,msg);
+			Data = options.handleMessage(this.Data,msg);
 		},
 		enumerable: false,
 		configurable: false,
