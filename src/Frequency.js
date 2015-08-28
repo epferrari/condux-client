@@ -153,8 +153,7 @@ function Frequency(topic,nexus,options){
 				request_token: token,
 				constraints: constraints
 			};
-			constraints = JSON.stringify(req);
-			nexus.joinAndSend("req",this.topic,req);
+			nexus.joinAndSend("req",this.topic, JSON.stringify(req));
 		});
 	};
 }
