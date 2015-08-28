@@ -41,6 +41,7 @@ function Frequency(topic,nexus,options){
 	options = merge({},defaults,options);
 
 	this._listeners_ = {};
+	this._responseListeners_ = {};
 
 	this.didConnect = new Promise( (resolve) => this.onconnected = resolve);
 
@@ -131,15 +132,25 @@ function Frequency(topic,nexus,options){
 
 	nexus.didConnect.then( () => {
 		nexus.joinAndSend("sub",this.topic);
-		// onopen serves no purpose currently 
+		// onopen serves no purpose currently
 		setTimeout( () => this.broadcast("open"),0 );
 	});
 
 	this.request = (constraints) => {
 		return new Promise( (resolve,reject) => {
-			this.onresponse = (responseData) => resolve(responseData);
-			constraints = JSON.stringify(constraints);
-			nexus.joinAndSend("req",this.topic,constraints);
+			// create a token to cache the resolver for when then the request receives a response,
+			// token is a randomly-generated id string, and when the server responds
+			// the resolver will be called with the response body
+			let token = this.__addResponseListener( (token,body) => {
+				delete this._responseListeners_[token];
+				resolve(body);
+			});
+			let req = {
+				request_token: token,
+				constraints: constraints
+			};
+			constraints = JSON.stringify(req);
+			nexus.joinAndSend("req",this.topic,req);
 		});
 	};
 }
@@ -171,6 +182,12 @@ Frequency.prototype = {
 				resolve();
 			});
 		}));
+	},
+
+	onresponse(response){
+		let responseHandler = this._responseListeners_[response.request_token];
+		// this calls the resolver of the promise created by the request
+		if(responseHandler) responseHandler(response.request_token,response.body);
 	},
 
 	onclose(){
@@ -229,6 +246,12 @@ Frequency.prototype = {
 	*/
 	removeListener(token){
 		delete this._listeners_[token];
+	},
+
+	__addResponseListener(responseHandler){
+		var token = uniqId();
+		this._responseListeners_[token] = responseHandler;
+		return token;
 	},
 
 	close(){
