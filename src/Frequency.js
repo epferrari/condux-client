@@ -24,8 +24,8 @@ var typeOf = function(obj) {
 * @param {string} topic - name handle of the Frequency, ex `/chat`
 * @param {object} nexus - the ClientNexus instance that owns the Frequency
 * @param {object} options
-* @param {function} [options.onConnection=Frequency.prototype._hydrateData] - handle initial data flowing into `Data` on connection
-* @param {function} [options.onMessage=Frequency.prototype._updateData] - handle the updating `Data` from incoming message
+* @param {function} [options.handleConnection=Frequency.prototype._hydrateData] - handle initial data flowing into `Data` on connection
+* @param {function} [options.handleMessage=Frequency.prototype._updateData] - handle the updating `Data` from incoming message
 */
 
 function Frequency(topic,nexus,options){
