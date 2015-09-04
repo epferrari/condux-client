@@ -84,6 +84,7 @@ ClientNexus.prototype = {
 	* @desc Handle messages from the ServerNexus on different channels by sending
 	* them to the appropriate frequency
 	* @param {object} e - the event object passed from `<SockJS>.addEventLister`
+	* @private
 	*/
 	_multiplex(e){
 		var queue = this._queue;
@@ -115,16 +116,19 @@ ClientNexus.prototype = {
 
 		switch(type){
 			case "uns":
-				setTimeout( () => frequency.broadcast("close"),0 );
+				_broadcast(frequency,"close");
 				break;
 			case "conn":
-				setTimeout( () => frequency.broadcast("connection",payload),0 );
+				_broadcast(frequency,"connection",payload);
 				break;
 			case "msg":
-				setTimeout( () => frequency.broadcast("message",payload),0 );
+				_broadcast(frequency,"message",payload);
 				break;
 			case "res":
-				setTimeout( () => frequency.broadcast("response",payload),0 );
+				_broadcast(frequency,"response",payload);
+				break;
+			case "err":
+				_broadcast(frequency,"error",payload);
 				break;
 			case "rej":
 				// channel is not registered with the server (yet), but might be later.
@@ -137,6 +141,7 @@ ClientNexus.prototype = {
 
 	/**
 	* @desc Format type, topic, and data to send to ServerNexus
+	* @private
 	*/
 	joinAndSend(){
 		var msgArray = [].slice.call(arguments,0);
@@ -144,12 +149,9 @@ ClientNexus.prototype = {
 	},
 
 	/**
-	* @name createAction
 	* @desc Create a function that sends a keyed object with actionType
 	* and payload to a `ServerNexus`. Use like you would use `Reflux.createAction` for
 	* a local store.
-	*
-	* @method
 	* @param {string} actionName - name of the action the ServerNexus will need to listen to
 	* @returns {function} An action that should be called with an object payload
 	* to be serialized and sent over the wire to the `ServerNexus`
@@ -165,9 +167,7 @@ ClientNexus.prototype = {
 	},
 
 	/**
-	* @name createActions
 	* @desc Create a hash of action name keys with ClientNexus actions as values
-	*
 	* @param {string[]} actionNames - create a hash of actions, use like you would
 	* `Reflux.createActions` for a local store.
 	* @returns {object} - a hash of action functions that accept an object payload to
@@ -181,14 +181,12 @@ ClientNexus.prototype = {
 	},
 
 	/**
-	* @name registerFrequency
 	* @desc Create a new Frequency to subscribe to data streams from
 	* @param {string} topic - The Frequency's name handle
 	* @param {object} options - hash of options
-	* @param {boolean} [options.merge=false] - should the Frequency's `datastream` be merged or updated when new data arrives?
-	* @param {function} [options.mergeWith=Frequency.prototype.mergeStream] - handle the merging of new data into `datastream`
-	* @param {function} [options.updateWith=Frequency.prototype.updateStream] - handle the updating of new data to `datastream`
-	* @returns {object} A Frequency instance
+	* @param {function} [options.setInitialData=Frequency.prototype._hydrateData] - handle the merging of new data into `datastream`
+	* @param {function} [options.updateData=Frequency.prototype._updateData] - handle the updating of new data to `datastream`
+	* @returns {Frequency} A Frequency instance
 	*/
 	registerFrequency(topic,options){
 		let frequency = this.band[topic];
@@ -228,7 +226,7 @@ ClientNexus.prototype = {
 * @desc Convenience Mixin for a React Component, giving it a `tuneIn` method that
 * that allows the component to subscribe to a `ClientNexus Frequency` with a handler.
 * Conveniently removes all Component handlers from the Frequency on `componentWillUnmount`
-* @name Connect
+* @mixin
 * @memberof ClientNexus
 */
 ClientNexus.Connect = {
@@ -236,12 +234,14 @@ ClientNexus.Connect = {
 		this._nexusTokens = {};
 		/**
 		* @name tuneInto
+		* @extends React.Component
 		* @desc Tune into a ClientNexus `Frequency` and handle Frequency lifecyle events `connection`,`message`, and `close`
 		* @param {object} frequency - a Frequency name handle
 		* @param {object} handlers - a hash of callbacks for Frequency's lifecycle events
-		* @param {onConnection} handlers.onConnection
-		* @param {onMessage} handlers.onMessage
-		* @param {onClose} handlers.onClose
+		* @param {onConnection} [handlers.onConnection]
+		* @param {onMessage} [handlers.onMessage]
+		* @param {onClose} [handlers.onClose]
+		* @implements ClientNexus.Connect
 		*/
 		this.tuneInto = (frequency,handlers) => {
 
@@ -271,6 +271,7 @@ ClientNexus.Connect = {
 * @param {onConnection} handlers.onConnection
 * @param {onMessage} handlers.onMessage
 * @param {onClose} handlers.onClose
+* @private
 */
 function listenToFrequency(frequency,handlers){
 
@@ -280,14 +281,15 @@ function listenToFrequency(frequency,handlers){
 	}
 
 	let {topic} = frequency;
-	handlers.sub = this;
 	if( !this._nexusTokens[topic] ){
-		let token = frequency.addListener.call(frequency,handlers);
+		let token = frequency.addListener(this,handlers);
 		this._nexusTokens[topic] = frequency.removeListener.bind(frequency,token);
 	}
 }
 
 
-
+function _broadcast(frequency,message,payload){
+	setTimeout(() => frequency.broadcast(message,payload),0);
+}
 
 export {ClientNexus as default};

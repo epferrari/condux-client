@@ -6,10 +6,12 @@
 	"scripts": {
 		"test": "echo \"Error: no test specified\" && exit 1",
 		"lint": "eslint ./src",
-		"preclean":"npm run lint",
+		"docs": "jsdoc2md ./lib/*.js  --global-index-format none --separators true > README.md",
+		"preclean": "npm run lint",
 		"clean": "rm -rf ./lib/*",
-		"predist": "npm run clean",
-		"dist": "mkdir -p ./lib && babel ./src -d ./lib"
+		"prebuild": "npm run clean",
+		"build": "mkdir -p ./lib && babel ./src -d ./lib",
+		"postbuild":"npm run docs"
 	},
 	"repository": {
 		"type": "git",
@@ -32,7 +34,10 @@
 	"devDependencies": {
 		"babel": "^5.8.21",
 		"babel-eslint": "^4.0.10",
-		"eslint": "^1.1.0"
+		"dmd": "^1.1.1",
+		"docco": "^0.7.0",
+		"eslint": "^1.1.0",
+		"jsdoc-to-markdown": "^1.1.1"
 	},
 	"dependencies": {
 		"sockjs-client": "^1.0.3"
