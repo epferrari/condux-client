@@ -215,7 +215,7 @@ ClientNexus.prototype = {
 	* @since 0.2.4
 	*/
 	Hz(topic,options){
-		return this.registerFreqency(topic,options);
+		return this.registerFrequency(topic,options);
 	}
 };
 
