@@ -72,7 +72,7 @@ function Frequency(topic,nexus,options){
 			// resolve promise on connection
 			connection: function(){
 				this.isConnected = true;
-				reslove();
+				resolve();
 			},
 			// unsubscribe from server updates onclose
 			close: function(){
