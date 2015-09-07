@@ -1,6 +1,6 @@
 {
 	"name": "reflux-nexus-client",
-	"version": "0.2.2",
+	"version": "0.2.4",
 	"description": "An over-the-wire implementation of Reflux using Sock.js with a mixin for React components. Sister package to `reflux-nexus`",
 	"main": "reflux-nexus-client.js",
 	"scripts": {
