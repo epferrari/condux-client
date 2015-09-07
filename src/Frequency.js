@@ -33,7 +33,7 @@ var typeOf = function(obj) {
 * 	If declared, replaces `options.handleConnection`
 * @param {function} [options.updateData] - (since 0.2.3) new API for handling how messages from the server
 * 	are integrated into `this.Data`. If declared, replaces `options.handleMessage`
-* @param {function} [options.provideCredentials] - provide a hash of credentials to the Server
+* @param {function} [options.provideCredentials] - provide a function that returns a hash of credentials to the Server
 * 	(if required by the Channel to connect, otherwise leave blank)
 * @protected
 */

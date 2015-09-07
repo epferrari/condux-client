@@ -10,6 +10,7 @@
     * [.createAction(actionName)](#ClientNexus+createAction) ⇒ <code>function</code>
     * [.createActions(actionNames)](#ClientNexus+createActions) ⇒ <code>object</code>
     * [.registerFrequency(topic, options)](#ClientNexus+registerFrequency) ⇒ <code>[Frequency](#Frequency)</code>
+    * [.Hz()](#ClientNexus+Hz)
   * _static_
     * [.Connect](#ClientNexus.Connect)
 
@@ -101,7 +102,17 @@ Create a new Frequency to subscribe to data streams from
 | options | <code>object</code> |  | hash of options |
 | [options.setInitialData] | <code>function</code> | <code>Frequency.prototype._hydrateData</code> | handle the merging of new data into `datastream` |
 | [options.updateData] | <code>function</code> | <code>Frequency.prototype._updateData</code> | handle the updating of new data to `datastream` |
+| [options.provideCredentials] | <code>function</code> |  | provide a function that returns a hash of credentials to the Server 	(if required by the Channel to connect, otherwise leave blank) |
 
+
+-
+
+<a name="ClientNexus+Hz"></a>
+### clientNexus.Hz()
+convenience alias for `registerFrequency`
+
+**Kind**: instance method of <code>[ClientNexus](#ClientNexus)</code>  
+**Since**: 0.2.4  
 
 -
 
@@ -151,7 +162,7 @@ A read-only stream of data from the server on `topic`. Split from a single webso
 | [options.handleMessage] | <code>function</code> | <code>Frequency.prototype._updateData</code> | handle the updating 	`Data` from incoming message |
 | [options.setInitialData] | <code>function</code> |  | (since 0.2.3) new API for bootstrapping `this.Data` on connection to Server. 	If declared, replaces `options.handleConnection` |
 | [options.updateData] | <code>function</code> |  | (since 0.2.3) new API for handling how messages from the server 	are integrated into `this.Data`. If declared, replaces `options.handleMessage` |
-| [options.provideCredentials] | <code>function</code> |  | provide a hash of credentials to the Server 	(if required by the Channel to connect, otherwise leave blank) |
+| [options.provideCredentials] | <code>function</code> |  | provide a function that returns a hash of credentials to the Server 	(if required by the Channel to connect, otherwise leave blank) |
 
 
 -
