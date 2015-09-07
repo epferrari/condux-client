@@ -71,7 +71,18 @@ ClientNexus.prototype = {
 		each(this.band, (fq) => {
 			fq.removeListener(fq._connectionToken);
 			fq.didConnect = new Promise(resolve => {
-				fq._connectionToken = fq.addListener(fq,{connection: resolve});
+				fq._connectionToken = fq.addListener(fq,{
+					// resolve promise on connection
+					connection: function(){
+						fq.isConnected = true;
+						resolve();
+					},
+					// unsubscribe from server updates onclose
+					close: function(){
+						fq.isConnected = false;
+						nexus.joinAndSend("uns",fq.topic);
+					}
+				});
 			});
 			this.didConnect.then(() => fq._subscribe());
 		});
