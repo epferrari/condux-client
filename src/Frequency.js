@@ -55,9 +55,7 @@ function Frequency(topic,nexus,options){
 
 	/* send subscription request to the server nexus, call at end of constructor*/
 	this._subscribe = function(){
-		nexus.didConnect.then( () => {
-			nexus.joinAndSend("sub",topic,options.provideCredentials());
-		});
+		nexus.joinAndSend("sub",topic,options.provideCredentials());
 	}
 
 	this._subscriptions_ = {};
@@ -229,11 +227,18 @@ function Frequency(topic,nexus,options){
 				request_token: token,
 				constraints: constraints
 			};
-			nexus.joinAndSend("req",this.topic, JSON.stringify(req));
+			this.didConnect.then(() => {
+				// the connection was lost before the request went out
+				if(!this.isConnected){
+					reject('Frequency is no longer connected');
+				}else{
+					nexus.joinAndSend("req",this.topic, JSON.stringify(req));
+				}
+			});
 		});
 	};
 
-	this._subscribe();
+	nexus.didConnect.then(() => this._subscribe());
 
 }
 
