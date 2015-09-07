@@ -69,11 +69,11 @@ ClientNexus.prototype = {
 
 		// resubscribe the frequencies
 		each(this.band, (fq) => {
-			fq.didConnect = new Promise( (resolve) => fq.onconnected = resolve);
-			this.didConnect.then( () => {
-				this.joinAndSend("sub",fq.topic);
-				setTimeout( () => fq.broadcast("open"),0 );
+			fq.removeListener(fq._connectionToken);
+			fq.didConnect = new Promise(resolve => {
+				fq._connectionToken = fq.addListener(fq,{connection: resolve});
 			});
+			this.didConnect.then(() => fq._subscribe());
 		});
 
 		// reapply the message handling multiplexer
@@ -202,20 +202,20 @@ ClientNexus.prototype = {
 
 
 /**
-* @callback onConnection
+* @callback connectionHandler
 * @desc A callback for the ClientNexus.Connect mixin triggered when the component initially tunes into a Frequency
 * @param {object|array} hydration - the tuned-in Frequency's `datastream` when the component begins listening
 */
 
 /**
-* @callback onMessage
+* @callback messageHandler
 * @desc A callback for the ClientNexus.Connect mixin triggered when Frequency receives server data
 * @param {object|array} message - the tuned-in Frequency's latest message from the server
 * @param {object|array} datastream - a copy of the Frequency's full datastream
 */
 
 /**
-* @callback onClose
+* @callback closeHandler
 * @desc A callback for the ClientNexus.Connect mixin triggered when Frequency receives server data
 */
 
@@ -238,21 +238,12 @@ ClientNexus.Connect = {
 		* @desc Tune into a ClientNexus `Frequency` and handle Frequency lifecyle events `connection`,`message`, and `close`
 		* @param {object} frequency - a Frequency name handle
 		* @param {object} handlers - a hash of callbacks for Frequency's lifecycle events
-		* @param {onConnection} [handlers.onConnection]
-		* @param {onMessage} [handlers.onMessage]
-		* @param {onClose} [handlers.onClose]
+		* @param {connectionHandler} [handlers.connection]
+		* @param {messageHandler} [handlers.message]
+		* @param {closeHandler} [handlers.close]
 		* @implements ClientNexus.Connect
 		*/
 		this.tuneInto = (frequency,handlers) => {
-
-
-			let defaults = {
-				onConnection(){},
-				onMessage(){},
-				onClose(){}
-			};
-
-			handlers = merge({},defaults,handlers);
 			listenToFrequency.call(this,frequency,handlers);
 		};
 	},
@@ -268,9 +259,9 @@ ClientNexus.Connect = {
 * @desc Helper function to subscribe the implementing object to a `Frequency` with listener callbacks
 * @param {object} frequency - The `ClientNexus.Frequency` to being listened to
 * @param {object} handlers - a hash of callbacks for Frequency's lifecycle events
-* @param {onConnection} handlers.onConnection
-* @param {onMessage} handlers.onMessage
-* @param {onClose} handlers.onClose
+* @param {connectionHandler} handlers.connection
+* @param {messageHandler} handlers.message
+* @param {closeHandler} handlers.close
 * @private
 */
 function listenToFrequency(frequency,handlers){

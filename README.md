@@ -151,6 +151,7 @@ A read-only stream of data from the server on `topic`. Split from a single webso
 | [options.handleMessage] | <code>function</code> | <code>Frequency.prototype._updateData</code> | handle the updating 	`Data` from incoming message |
 | [options.setInitialData] | <code>function</code> |  | (since 0.2.3) new API for bootstrapping `this.Data` on connection to Server. 	If declared, replaces `options.handleConnection` |
 | [options.updateData] | <code>function</code> |  | (since 0.2.3) new API for handling how messages from the server 	are integrated into `this.Data`. If declared, replaces `options.handleMessage` |
+| [options.provideCredentials] | <code>function</code> |  | provide a hash of credentials to the Server 	(if required by the Channel to connect, otherwise leave blank) |
 
 
 -
@@ -246,9 +247,9 @@ Add a handler for Frequency's `onmessage` event
 | --- | --- | --- |
 | listener | <code>object</code> | handlers are invoked with listener as `this` |
 | handlers | <code>object</code> | a hash of callbacks to execute when the Frequency recieves an update from its Channel-Store on the server |
-| [handlers.onConnection] | <code>function</code> |  |
-| [handlers.onMessage] | <code>function</code> |  |
-| [handlers.onClose] | <code>function</code> |  |
+| [handlers.connection] | <code>function</code> |  |
+| [handlers.message] | <code>function</code> |  |
+| [handlers.close] | <code>function</code> |  |
 
 
 -
@@ -286,15 +287,15 @@ Tune into a ClientNexus `Frequency` and handle Frequency lifecyle events `connec
 | --- | --- | --- |
 | frequency | <code>object</code> | a Frequency name handle |
 | handlers | <code>object</code> | a hash of callbacks for Frequency's lifecycle events |
-| [handlers.onConnection] | <code>[onConnection](#onConnection)</code> |  |
-| [handlers.onMessage] | <code>[onMessage](#onMessage)</code> |  |
-| [handlers.onClose] | <code>[onClose](#onClose)</code> |  |
+| [handlers.connection] | <code>[connectionHandler](#connectionHandler)</code> |  |
+| [handlers.message] | <code>[messageHandler](#messageHandler)</code> |  |
+| [handlers.close] | <code>[closeHandler](#closeHandler)</code> |  |
 
 
 -
 
-<a name="onConnection"></a>
-## onConnection : <code>function</code>
+<a name="connectionHandler"></a>
+## connectionHandler : <code>function</code>
 A callback for the ClientNexus.Connect mixin triggered when the component initially tunes into a Frequency
 
 **Kind**: global typedef  
@@ -306,8 +307,8 @@ A callback for the ClientNexus.Connect mixin triggered when the component initia
 
 -
 
-<a name="onMessage"></a>
-## onMessage : <code>function</code>
+<a name="messageHandler"></a>
+## messageHandler : <code>function</code>
 A callback for the ClientNexus.Connect mixin triggered when Frequency receives server data
 
 **Kind**: global typedef  
@@ -320,8 +321,8 @@ A callback for the ClientNexus.Connect mixin triggered when Frequency receives s
 
 -
 
-<a name="onClose"></a>
-## onClose : <code>function</code>
+<a name="closeHandler"></a>
+## closeHandler : <code>function</code>
 A callback for the ClientNexus.Connect mixin triggered when Frequency receives server data
 
 **Kind**: global typedef  

@@ -18,6 +18,7 @@ var typeOf = function(obj) {
 	return ({}).toString.call(obj).match(/\s([a-zA-Z]+)/)[1].toLowerCase();
 };
 
+
 /**
 * @desc A read-only stream of data from the server on `topic`. Split from a single websocket connection
 * @constructor
@@ -32,20 +33,32 @@ var typeOf = function(obj) {
 * 	If declared, replaces `options.handleConnection`
 * @param {function} [options.updateData] - (since 0.2.3) new API for handling how messages from the server
 * 	are integrated into `this.Data`. If declared, replaces `options.handleMessage`
+* @param {function} [options.provideCredentials] - provide a hash of credentials to the Server
+* 	(if required by the Channel to connect, otherwise leave blank)
 * @protected
 */
 
 function Frequency(topic,nexus,options){
+
+	this.isConnected = false;
 
 	var _Data = {},
 			stream = [],
 			history = [],
 			defaults = {
 				handleConnection: Frequency.prototype._hydrateData.bind(this),
-				handleMessage: Frequency.prototype._updateData.bind(this)
+				handleMessage: Frequency.prototype._updateData.bind(this),
+				provideCredentials: function(){ return null; }
 			};
 
 	options = merge({},defaults,options);
+
+	/* send subscription request to the server nexus, call at end of constructor*/
+	this._subscribe = function(){
+		nexus.didConnect.then( () => {
+			nexus.joinAndSend("sub",topic,options.provideCredentials());
+		});
+	}
 
 	this._subscriptions_ = {};
 	this._responseListeners_ = {};
@@ -54,7 +67,20 @@ function Frequency(topic,nexus,options){
 	* @desc A promise that is fulfilled when the Frequency connects with the
 	* Server Nexus
 	*/
-	this.didConnect = new Promise(resolve => this.onconnected = resolve);
+	this.didConnect = new Promise(resolve => {
+		this._connectionToken = this.addListener(this,{
+			// resolve promise on connection
+			connection: function(){
+				this.isConnected = true;
+				reslove();
+			},
+			// unsubscribe from server updates onclose
+			close: function(){
+				this.isConnected = false;
+				nexus.joinAndSend("uns",this.topic);
+			}
+		});
+	});
 
 	/**
 	* @desc get the state of Frequency's internal `datastream` at `index` in history.
@@ -65,13 +91,6 @@ function Frequency(topic,nexus,options){
 	this.history = function(index){
 		return history[index];
 	};
-	// unsubscribe from server updates onclose
-	// here instead of `this.onclose` to protect the socket from unauthorized sends
-	this.addListener(this,{
-		onClose: function(){
-			nexus.joinAndSend("uns",this.topic);
-		}
-	});
 
 	/**
 	* @name topic
@@ -181,12 +200,7 @@ function Frequency(topic,nexus,options){
 		writable: false
 	});
 
-	/* send subscription request to the server nexus*/
-	nexus.didConnect.then( () => {
-		nexus.joinAndSend("sub",this.topic);
-		// onopen serves no purpose currently
-		setTimeout( () => this.broadcast("open"),0 );
-	});
+
 
 	/**
 	* @desc the client side of Nexus request API. Sends constraints to a server ChannelStore,
@@ -218,6 +232,9 @@ function Frequency(topic,nexus,options){
 			nexus.joinAndSend("req",this.topic, JSON.stringify(req));
 		});
 	};
+
+	this._subscribe();
+
 }
 
 Frequency.prototype = {
@@ -231,7 +248,16 @@ Frequency.prototype = {
 	onconnection(data){
 		// update or merge with Frequency's data stream, depending on options set
 		this._hydrate_(data);
-		setTimeout( () => this.broadcast('connected'),0 );
+		Promise.all(map(this._subscriptions_, sub => {
+			return new Promise( (resolve,reject) => {
+				let {listener,handlers} = sub;
+				/* deprecated - onConnection handlers when registering listeners, removing in 1.0 */
+				handlers.onConnection && handlers.onConnection.apply(listener,[msg,this.Data]);
+				/* updated API as of 0.2.4 */
+				handlers.connection && handlers.connection.apply(listener,[msg,this.Data]);
+				resolve();
+			});
+		}));
 	},
 
 	onmessage(msg){
@@ -244,7 +270,10 @@ Frequency.prototype = {
 		Promise.all(map(this._subscriptions_, sub => {
 			return new Promise( (resolve,reject) => {
 				let {listener,handlers} = sub;
+				/* deprecated - onMessage handlers when registering listeners, removing in 1.0 */
 				handlers.onMessage && handlers.onMessage.apply(listener,[msg,this.Data]);
+				/* updated API as of 0.2.4 */
+				handlers.message && handlers.message.apply(listener,[msg,this.Data]);
 				resolve();
 			});
 		}));
@@ -267,7 +296,10 @@ Frequency.prototype = {
 		Promise.all(map(this._subscriptions_, sub => {
 			return new Promise(function(resolve,reject){
 				let {listener,handlers} = sub;
+				/* deprecated - onClose handlers for registering listeners, removing in 1.0 */
 				handlers.onClose && handlers.onClose.apply(listener);
+				/* updated API as of 0.2.4 */
+				handlers.close && handlers.close.apply(listener);
 				resolve();
 			});
 		}));
@@ -297,16 +329,19 @@ Frequency.prototype = {
 	* @param {object} listener - handlers are invoked with listener as `this`
 	* @param {object} handlers - a hash of callbacks to execute when the Frequency recieves an
 	* update from its Channel-Store on the server
-	* @param {function} [handlers.onConnection]
-	* @param {function} [handlers.onMessage]
-	* @param {function} [handlers.onClose]
+	* @param {function} [handlers.connection]
+	* @param {function} [handlers.message]
+	* @param {function} [handlers.close]
 	* @returns {string} token - unique identifier for the registered listener
 	*/
 	addListener(listener,handlers){
 		var token = uniqId();
 		var h = handlers;
 		this._subscriptions_[token] = {listener,handlers};
-		this.didConnect.then( () => h.onConnection && h.onConnection.call(listener,this.Data,this.stream) );
+		/* deprecated - onConnection handler for listeners, removing for 1.0 */
+		if(this.isConnected && h.onConnection) h.onConnection.call(listener,this.Data,this.stream);
+		/* new API as of 0.2.4 */
+		if(this.isConnected && h.connection) h.connection.call(listener,this.Data,this.stream);
 		return token;
 	},
 
