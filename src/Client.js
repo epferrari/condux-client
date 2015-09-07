@@ -114,7 +114,7 @@ ClientNexus.prototype = {
 			let registeredTopic = payload.registered;
 			let queuePosition = queue.indexOf(registeredTopic);
 			if(queuePosition !== -1){
-				this.joinAndSend("sub",registeredTopic);
+				frequency._subscribe();
 				pull(queue,registeredTopic);
 			}
 		}
