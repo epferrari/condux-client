@@ -136,10 +136,7 @@ Conveniently removes all Component handlers from the Frequency on `componentWill
   * [.didConnect](#Frequency+didConnect)
   * [.topic](#Frequency+topic)
   * [.band](#Frequency+band)
-  * [.count](#Frequency+count)
-  * [.stream](#Frequency+stream)
   * [.Data](#Frequency+Data) ⇒ <code>any</code>
-  * [.history(index)](#Frequency+history) ⇒ <code>Data</code>
   * [.request(constraints)](#Frequency+request) ⇒ <code>Promise</code>
   * [.addListener(listener, handlers)](#Frequency+addListener) ⇒ <code>string</code>
   * [.removeListener(token)](#Frequency+removeListener)
@@ -193,41 +190,11 @@ this Frequency
 
 -
 
-<a name="Frequency+count"></a>
-### frequency.count
-get the number of updates Frequency has received from the server
-
-**Kind**: instance property of <code>[Frequency](#Frequency)</code>  
-
--
-
-<a name="Frequency+stream"></a>
-### frequency.stream
-immutably get Frequency's internal stream of messages
-
-**Kind**: instance property of <code>[Frequency](#Frequency)</code>  
-
--
-
 <a name="Frequency+Data"></a>
 ### frequency.Data ⇒ <code>any</code>
 **Kind**: instance property of <code>[Frequency](#Frequency)</code>  
 **Returns**: <code>any</code> - - getter: returns immutable _Data state of Frequency  
 **Read only**: true  
-
--
-
-<a name="Frequency+history"></a>
-### frequency.history(index) ⇒ <code>Data</code>
-get the state of Frequency's internal `datastream` at `index` in history.
-0 is initial hydration from server
-
-**Kind**: instance method of <code>[Frequency](#Frequency)</code>  
-
-| Param | Type |
-| --- | --- |
-| index | <code>number</code> | 
-
 
 -
 

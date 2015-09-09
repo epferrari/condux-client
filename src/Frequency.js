@@ -43,8 +43,6 @@ function Frequency(topic,nexus,options){
 	this.isConnected = false;
 
 	var _Data = {},
-			stream = [],
-			history = [],
 			defaults = {
 				handleConnection: Frequency.prototype._hydrateData.bind(this),
 				handleMessage: Frequency.prototype._updateData.bind(this),
@@ -81,16 +79,6 @@ function Frequency(topic,nexus,options){
 	});
 
 	/**
-	* @desc get the state of Frequency's internal `datastream` at `index` in history.
-	* 0 is initial hydration from server
-	* @param {number} index
-	* @returns {Data}
-	*/
-	this.history = function(index){
-		return history[index];
-	};
-
-	/**
 	* @name topic
 	* @instance
 	* @memberof Frequency
@@ -110,29 +98,6 @@ function Frequency(topic,nexus,options){
 		"__is_reflux_nexus_frequency__": { value: true }
 	});
 
-	/**
-	* @name count
-	* @instance
-	* @memberof Frequency
-	* @desc get the number of updates Frequency has received from the server
-	*/
-	Object.defineProperty(this,'count',{
-		get: function(){ return history.length - 1; },
-		enumerable: true,
-		configurable: false
-	});
-
-	/**
-	* @name stream
-	* @instance
-	* @memberof Frequency
-	* @desc immutably get Frequency's internal stream of messages
-	*/
-	Object.defineProperty(this,'stream',{
-		get: function(){ return map(stream, itm => itm); },
-		enumerable: true,
-		configurable: false
-	});
 
 	/**
 	* @name Data
@@ -168,7 +133,6 @@ function Frequency(topic,nexus,options){
 	Object.defineProperty(this,"_hydrate_",{
 		value: function(bootstrap){
 			let {handleConnection,setInitialData} = options;
-			history.unshift(_Data);
 			_Data = setInitialData ? setInitialData(bootstrap) : handleConnection(bootstrap);
 		},
 		enumerable: false,
@@ -189,8 +153,6 @@ function Frequency(topic,nexus,options){
 	Object.defineProperty(this,"_update_", {
 		value: function(message) {
 			let {handleMessage,updateData} = options;
-			history.unshift(_Data);
-			stream.unshift(message);
 			_Data = updateData ? updateData(message,this.Data) : handleMessage(message,this.Data);
 		},
 		enumerable: false,
@@ -344,9 +306,9 @@ Frequency.prototype = {
 		var h = handlers;
 		this._subscriptions_[token] = {listener,handlers};
 		/* deprecated - onConnection handler for listeners, removing for 1.0 */
-		if(this.isConnected && h.onConnection) h.onConnection.call(listener,this.Data,this.stream);
+		if(this.isConnected && h.onConnection) h.onConnection.call(listener,this.Data);
 		/* new API as of 0.2.4 */
-		if(this.isConnected && h.connection) h.connection.call(listener,this.Data,this.stream);
+		if(this.isConnected && h.connection) h.connection.call(listener,this.Data);
 		return token;
 	},
 
