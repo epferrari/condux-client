@@ -257,9 +257,9 @@ Frequency.prototype = {
 			return new Promise( (resolve,reject) => {
 				let {listener,handlers} = sub;
 				/* deprecated - onConnection handlers when registering listeners, removing in 1.0 */
-				handlers.onConnection && handlers.onConnection.apply(listener,[data,this.Data]);
+				handlers.onConnection && handlers.onConnection.apply(listener,[this.Data]);
 				/* updated API as of 0.2.4 */
-				handlers.connection && handlers.connection.apply(listener,[data,this.Data]);
+				handlers.connection && handlers.connection.apply(listener,[this.Data]);
 				resolve();
 			});
 		}));
