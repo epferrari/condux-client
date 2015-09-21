@@ -1,6 +1,12 @@
 //import sockjs from 'sockjs-client';
-import Frequency from './Frequency.js';
-import {pull,merge,each} from '../vendor/lodash_merge.pull.map.each.reduce.uniq.js';
+import Frequency
+	from './Frequency.js';
+
+import Promise
+	from 'bluebird';
+
+import {pull,merge,each}
+	from '../vendor/lodash_merge.pull.map.each.reduce.uniq.js';
 
 var typeOf = function(obj) {
 	return ({}).toString.call(obj).match(/\s([a-zA-Z]+)/)[1].toLowerCase();

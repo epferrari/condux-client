@@ -2,9 +2,12 @@
 * inspiration from https://github.com/sockjs/websocket-multiplex.git `multiplex_client`
 * tweaked to have unidirectional data flow across the wire
 */
+import Promise
+	from 'bluebird';
 
+import {map,reduce,merge,uniq}
+	from '../vendor/lodash_merge.pull.map.each.reduce.uniq.js';
 
-import {map,reduce,merge,uniq} from '../vendor/lodash_merge.pull.map.each.reduce.uniq.js';
 
 var random4 = function(){
 	return (((1 + Math.random()) * 0x10000) | 0).toString(16).substring(1).toUpperCase();
