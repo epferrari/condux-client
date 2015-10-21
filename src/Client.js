@@ -16,6 +16,7 @@ var typeOf = function(obj) {
 	return ({}).toString.call(obj).match(/\s([a-zA-Z]+)/)[1].toLowerCase();
 };
 
+var connecting = false;
 var Singleton;
 var REGISTRATIONS = "/REGISTRATIONS",
 		CLIENT_ACTIONS = "/CLIENT_ACTIONS";
@@ -72,6 +73,7 @@ ClientNexus.prototype = {
 		// call event hook
 		this._persistence.onConnecting();
 		// connect to websocket
+		connecting = true;
 		this.sock = new SockJS(this.url);
 		this.isConnected = () => (this.sock.readyState === 1);
 
@@ -90,6 +92,7 @@ ClientNexus.prototype = {
 				this.joinAndSend("sub",REGISTRATIONS);
 			})
 			.then(() => {
+				connecting = false;
 				this.sock.addEventListener("close",() => this._persistence.onDisconnect());
 				if(this._persistence.enabled){
 					// reset up a persistent connection, aka attempt to reconnect if the connection closes
@@ -104,61 +107,60 @@ ClientNexus.prototype = {
 	* persistence options `attempts` and `interval`
 	*/
 	reconnect(){
-		var attempts = this._persistence.attempts;
-		// immediately try to reconnect
-		var timeout = setTimeout(() => attemptReconnection,200);
+		if(!connecting){
+			var attempts = this._persistence.attempts;
+			// immediately try to reconnect
+			var timeout = setTimeout(() => attemptReconnection,200);
 
-		var attemptReconnection = function(){
-			if(attempts){
-				// setup to try again after interval
-				timeout = setTimeout(() => attemptReconnection,this._persistence.interval);
-				attempts--;
+			var attemptReconnection = function(){
+				if(attempts){
+					// setup to try again after interval
+					timeout = setTimeout(() => attemptReconnection,this._persistence.interval);
+					attempts--;
 
-				// attempt to re-establish the websocket connection
-				// resets `this.sock`
-				// resets `this.didConnect` to a new Promise resolved by `this.sock`
-				this.connect();
-				var nexus = this;
-				// re-subscribe all frequencies
-				each(this.band, (fq) => {
-					fq.removeListener(fq._connectionToken);
-					// create new didConnect Promise for each frequency
-					fq.didConnect = new Promise(resolve => {
-						fq._connectionToken = fq.addListener(fq,{
-							// resolve frequency's didConnect Promise on re-connection
-							connection: function(){
-								fq.isConnected = true;
-								resolve();
-							},
-							// unsubscribe from server updates onclose
-							close: function(){
-								fq.isConnected = false;
-								nexus.joinAndSend("uns",fq.topic);
-							}
+					// attempt to re-establish the websocket connection
+					// resets `this.sock`
+					// resets `this.didConnect` to a new Promise resolved by `this.sock`
+					this.connect();
+					var nexus = this;
+					// re-subscribe all frequencies
+					each(this.band, (fq) => {
+						fq.removeListener(fq._connectionToken);
+						// create new didConnect Promise for each frequency
+						fq.didConnect = new Promise(resolve => {
+							fq._connectionToken = fq.addListener(fq,{
+								// resolve frequency's didConnect Promise on re-connection
+								connection: function(){
+									fq.isConnected = true;
+									resolve();
+								},
+								// unsubscribe from server updates onclose
+								close: function(){
+									fq.isConnected = false;
+									nexus.joinAndSend("uns",fq.topic);
+								}
+							});
 						});
+						// resubscribe after ensuring new websocket connection
+						this.didConnect.then(() => fq._subscribe());
 					});
-					// resubscribe after ensuring new websocket connection
-					this.didConnect.then(() => fq._subscribe());
-				});
 
-				// re-apply the message handling multiplexer
-				this.sock.addEventListener("message",e => this._multiplex(e));
+					// re-apply the message handling multiplexer
+					this.sock.addEventListener("message",e => this._multiplex(e));
 
-				// Success, stop trying to reconnect,
-				this.didConnect.then(() => {
-					connecting = false;
-					attempts = 0;
-					clearTimeout(timeout);
-					// call event hook
-					setTimeout(() => this._persistence.onReconnect,800);
-				});
-			} else {
-				// Failure, stop trying to reconnect
-				connecting = false;
-				this._persistence.onTimeout();
-			}
-		}.bind(this);
-
+					// Success, stop trying to reconnect,
+					this.didConnect.then(() => {
+						attempts = 0;
+						clearTimeout(timeout);
+						// call event hook
+						setTimeout(() => this._persistence.onReconnect,800);
+					});
+				} else {
+					// Failure, stop trying to reconnect
+					this._persistence.onTimeout();
+				}
+			}.bind(this);
+		}
 	},
 
 	/**
