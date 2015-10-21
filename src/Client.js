@@ -1,6 +1,10 @@
-//import sockjs from 'sockjs-client';
+
 import Frequency
 	from './Frequency.js';
+
+// since 0.3.0
+import SockJs
+	from 'sockjs-client';
 
 import Promise
 	from 'bluebird';
@@ -17,84 +21,144 @@ var REGISTRATIONS = "/REGISTRATIONS",
 		CLIENT_ACTIONS = "/CLIENT_ACTIONS";
 
 /**
-* @desc A client-side companion to `reflux-nexus` on the server. All actions will
-* be called on the main `CLIENT_ACTIONS` channel, ensuring the Server dispatch can
-* perform its delegation.
-* @param {object} sock - a SockJS instance. Ensure that the prefix `http://yoururl.com{/prefix}` is `/reflux-nexus`
+* @desc A client-side companion to `reflux-nexus` on the server. Use to call actions that will be listened to
+* by Reflux stores on the server. Create actions Reflux-like actions with `<ClientNexus>.createAction` and `<ClientNexus>.createActions`.
+* All actions are called on the main `CLIENT_ACTIONS` channel, which handles all inbound action traffic from the client nexus to the server nexus,
+* ensuring the Server dispatch can perform its delegation in a reactive, unidirectional way.
+* @param {string} url - a url of your server to pass into SockJS. Ensure the prefix `http://yoururl.com:port{/prefix}` is `/reflux-nexus`
 * to connect to the `reflux-nexus` instance on your node server, or change the prefix on your server accordingly
+* @param {object} persistence
+* @param {boolean} [persistence.enabled=true] - should <ClientNexus> automatically try to reconnect on websocket "close" event
+* @param {number} [persistence.attempts=10] - how many times should <ClientNexus> attempt to reconnect after losing connection.
+* 		This happens inside <ClientNexus>.reconnect, which can be called independently of the websocket "close" event if necessary
+* @param {number} [persistence.interval=3000] - how long to wait between reconnection attempts, in milliseconds
+* @param {function} [persistence.onDisconnect=noop] - called when <ClientNexus> disconnects with a close event from websocket
+* @param {function} [persistence.onConnecting=noop] - called when <ClientNexus> begins a reconnection attempt
+* @param {function} [persistence.onReconnect=noop] - called when <ClientNexus> re-establishes connection to <ServerNexus>
 * @constructor
 */
-function ClientNexus(sock){
+function ClientNexus(url,persistence){
 
 	// use Singleton to ensure only one ClientNexus
 	if(Singleton) return Singleton;
 
+	// defaults for persistent connection
+	let p = {
+		enabled: true,
+		onDisconnect: function(){},
+		onConnecting: function(){},
+		onReconnect: function(){},
+		attempts: 10,
+		interval: 3000
+	};
+
+	this._persistence = merge({},persistence,p);
 	this._queue = [];
-	this.sock = sock;
+	this.url = url;
 	this.band = {};
-	this.connect(sock);
-	sock.addEventListener( "message", e => this._multiplex(e));
+	this.connect();
+	this.sock.addEventListener( "message", e => this._multiplex(e));
 
 	Singleton = this;
 }
 
 
-
-
 ClientNexus.prototype = {
 
 	/**
-	* @desc Set up frequency multiplexing
-	* @param {object} sock - A SockJS instance
+	* @desc Set up frequency multiplexing and persistent connection (if enabled)
 	*/
-	connect(sock){
-		this.sock = sock;
-		this.isConnected = () => (sock.readyState === 1);
+	connect(){
+		// call event hook
+		this._persistence.onConnecting();
+		// connect to websocket
+		this.sock = new SockJS(this.url);
+		this.isConnected = () => (this.sock.readyState === 1);
 
+		// create connection Promise
 		this.didConnect = new Promise( (resolve) => {
-			if(sock.readyState > 0){
+			if(this.sock.readyState > 0){
 				resolve();
 			} else {
-				sock.addEventListener("open",resolve);
+				this.sock.addEventListener("open",resolve);
 			}
 		});
 
-		this.didConnect.then( () => {
-			this.joinAndSend("sub",CLIENT_ACTIONS);
-			this.joinAndSend("sub",REGISTRATIONS);
-		});
+		this.didConnect
+			.then(() => {
+				this.joinAndSend("sub",CLIENT_ACTIONS);
+				this.joinAndSend("sub",REGISTRATIONS);
+			})
+			.then(() => {
+				this.sock.addEventListener("close",() => this._persistence.onDisconnect());
+				if(this._persistence.enabled){
+					// reset up a persistent connection, aka attempt to reconnect if the connection closes
+					this.sock.addEventListener("close",this.reconnect.bind(this));
+				}
+			});
 	},
 
 	/**
-	* @desc Set up frequency multiplexing after a disconnect with existing frequencies
-	* @param {object} sock - A SockJS instance
+	* @desc Set up frequency multiplexing after a disconnection with existing frequencies.
+	* Will attempt the reconnection with options passed to ClientNexus constructor as
+	* persistence options `attempts` and `interval`
 	*/
-	reconnect(sock){
-		// rebind to new sock
-		this.connect(sock);
+	reconnect(){
+		var attempts = this._persistence.attempts;
+		// immediately try to reconnect
+		var timeout = setTimeout(() => attemptReconnection,200);
 
-		// resubscribe the frequencies
-		each(this.band, (fq) => {
-			fq.removeListener(fq._connectionToken);
-			fq.didConnect = new Promise(resolve => {
-				fq._connectionToken = fq.addListener(fq,{
-					// resolve promise on connection
-					connection: function(){
-						fq.isConnected = true;
-						resolve();
-					},
-					// unsubscribe from server updates onclose
-					close: function(){
-						fq.isConnected = false;
-						nexus.joinAndSend("uns",fq.topic);
-					}
+		var attemptReconnection = function(){
+			if(attempts){
+				// setup to try again after interval
+				timeout = setTimeout(() => attemptReconnection,this._persistence.interval);
+				attempts--;
+
+				// attempt to re-establish the websocket connection
+				// resets `this.sock`
+				// resets `this.didConnect` to a new Promise resolved by `this.sock`
+				this.connect();
+				var nexus = this;
+				// re-subscribe all frequencies
+				each(this.band, (fq) => {
+					fq.removeListener(fq._connectionToken);
+					// create new didConnect Promise for each frequency
+					fq.didConnect = new Promise(resolve => {
+						fq._connectionToken = fq.addListener(fq,{
+							// resolve frequency's didConnect Promise on re-connection
+							connection: function(){
+								fq.isConnected = true;
+								resolve();
+							},
+							// unsubscribe from server updates onclose
+							close: function(){
+								fq.isConnected = false;
+								nexus.joinAndSend("uns",fq.topic);
+							}
+						});
+					});
+					// resubscribe after ensuring new websocket connection
+					this.didConnect.then(() => fq._subscribe());
 				});
-			});
-			this.didConnect.then(() => fq._subscribe());
-		});
 
-		// reapply the message handling multiplexer
-		sock.addEventListener("message",e => this._multiplex(e));
+				// re-apply the message handling multiplexer
+				this.sock.addEventListener("message",e => this._multiplex(e));
+
+				// Success, stop trying to reconnect,
+				this.didConnect.then(() => {
+					connecting = false;
+					attempts = 0;
+					clearTimeout(timeout);
+					// call event hook
+					setTimeout(() => this._persistence.onReconnect,800);
+				});
+			} else {
+				// Failure, stop trying to reconnect
+				connecting = false;
+				this._persistence.onTimeout();
+			}
+		}.bind(this);
+
 	},
 
 	/**
@@ -127,8 +191,10 @@ ClientNexus.prototype = {
 
 		try{ payload = JSON.parse(payload); }
 		catch(e){
+			// dispose the error
 			let x = e;
-			payload = {};
+			type = "err"
+			payload = {message: "ERROR: invalid payload. Payload must be stringified JSON."};
 		}
 
 		switch(type){
@@ -217,7 +283,35 @@ ClientNexus.prototype = {
 	},
 
 	/**
+	* enable automatic reconnection on websocket "close" event,
+	* for use after persistence has been set by constructor
+	* @since 0.3.0
+	*/
+	enablePersistence(){
+		if(!this._persistence.enabled){
+			this.sock.addEventListener("close",this.reconnect.bind(this));
+			this._persistence.enabled = true;
+		}
+	},
+
+	/**
+	* disable automatic reconnection on websocket "close" event,
+	* for use after persistence has been set by constructor
+	* @since 0.3.0
+	*/
+	disablePersistence(){
+		if(this._persistence.enabled){
+			this.sock.removeEventListener("close",this.reconnect.bind(this));
+			this._persistence.enabled = false;
+		}
+	},
+
+	/**
 	* convenience alias for `registerFrequency`
+	* @name Hz
+	* @instance
+	* @memberof ClientNexus
+	* @returns {Frequency} A Frequency instance
 	* @since 0.2.4
 	*/
 	Hz(topic,options){
@@ -248,7 +342,7 @@ ClientNexus.prototype = {
 
 
 /**
-* @name Connect
+* @name ReactConnectMixin
 * @static
 * @desc Convenience Mixin for a React Component, giving it a `tuneIn` method that
 * that allows the component to subscribe to a `ClientNexus Frequency` with a handler.
@@ -256,7 +350,7 @@ ClientNexus.prototype = {
 * @mixin
 * @memberof ClientNexus
 */
-ClientNexus.Connect = {
+ClientNexus.ReactConnectMixin = {
 	componentWillMount(){
 		this._nexusTokens = {};
 		/**
