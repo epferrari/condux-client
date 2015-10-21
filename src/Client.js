@@ -35,7 +35,8 @@ var REGISTRATIONS = "/REGISTRATIONS",
 * @param {number} [persistence.interval=3000] - how long to wait between reconnection attempts, in milliseconds
 * @param {function} [persistence.onDisconnect=noop] - called when <ClientNexus> disconnects with a close event from websocket
 * @param {function} [persistence.onConnecting=noop] - called when <ClientNexus> begins a reconnection attempt
-* @param {function} [persistence.onReconnect=noop] - called when <ClientNexus> re-establishes connection to <ServerNexus>
+* @param {function} [persistence.onConnection=noop] - called when <ClientNexus> re-establishes connection to <ServerNexus>
+* @param {function} [persistence.onTimeout=noop] - called when reconnection attempts are exhausted
 * @constructor
 */
 function ClientNexus(url,persistence){
@@ -48,7 +49,8 @@ function ClientNexus(url,persistence){
 		enabled: true,
 		onDisconnect: function(){},
 		onConnecting: function(){},
-		onReconnect: function(){},
+		onConnection: function(){},
+		onTimeout: function(){},
 		attempts: 10,
 		interval: 3000
 	};
@@ -93,6 +95,7 @@ ClientNexus.prototype = {
 			})
 			.then(() => {
 				connecting = false;
+				this._persistence.onConnection();
 				this.sock.addEventListener("close",() => this._persistence.onDisconnect());
 				if(this._persistence.enabled){
 					// reset up a persistent connection, aka attempt to reconnect if the connection closes
@@ -152,8 +155,6 @@ ClientNexus.prototype = {
 					this.didConnect.then(() => {
 						attempts = 0;
 						clearTimeout(timeout);
-						// call event hook
-						setTimeout(() => this._persistence.onReconnect,800);
 					});
 				} else {
 					// Failure, stop trying to reconnect

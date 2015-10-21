@@ -36,7 +36,8 @@ ensuring the Server dispatch can perform its delegation in a reactive, unidirect
 | [persistence.interval] | <code>number</code> | <code>3000</code> | how long to wait between reconnection attempts, in milliseconds |
 | [persistence.onDisconnect] | <code>function</code> | <code>noop</code> | called when <ClientNexus> disconnects with a close event from websocket |
 | [persistence.onConnecting] | <code>function</code> | <code>noop</code> | called when <ClientNexus> begins a reconnection attempt |
-| [persistence.onReconnect] | <code>function</code> | <code>noop</code> | called when <ClientNexus> re-establishes connection to <ServerNexus> |
+| [persistence.onConnection] | <code>function</code> | <code>noop</code> | called when <ClientNexus> re-establishes connection to <ServerNexus> |
+| [persistence.onTimeout] | <code>function</code> | <code>noop</code> | called when reconnection attempts are exhausted |
 
 
 -
