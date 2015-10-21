@@ -3,7 +3,7 @@ import Frequency
 	from './Frequency.js';
 
 // since 0.3.0
-import SockJs
+import SockJS
 	from 'sockjs-client';
 
 import Promise
