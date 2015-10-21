@@ -53,7 +53,7 @@ function ClientNexus(url,persistence){
 		interval: 3000
 	};
 
-	this._persistence = merge({},persistence,p);
+	this._persistence = merge({},p,persistence);
 	this._queue = [];
 	this.url = url;
 	this.band = {};
