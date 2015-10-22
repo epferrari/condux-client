@@ -1,5 +1,12 @@
 # CHANGELOG
 
+
+## 0.3.1
+
+- added `connected` and `connecting` getter methods to `<ClientNexus>`
+- bug fixes in `<ClientNexus>.reconnect`
+
+
 ## 0.3.0
 
 

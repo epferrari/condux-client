@@ -5,14 +5,16 @@
 * [ClientNexus](#ClientNexus)
   * [new ClientNexus(url, persistence)](#new_ClientNexus_new)
   * _instance_
+    * [.connect](#ClientNexus+connect)
+    * [.reconnect](#ClientNexus+reconnect)
+    * [.createAction](#ClientNexus+createAction) ⇒ <code>function</code>
+    * [.createActions](#ClientNexus+createActions) ⇒ <code>object</code>
+    * [.registerFrequency](#ClientNexus+registerFrequency) ⇒ <code>[Frequency](#Frequency)</code>
+    * [.enablePersistence](#ClientNexus+enablePersistence)
+    * [.disablePersistence](#ClientNexus+disablePersistence)
     * [.Hz](#ClientNexus+Hz) ⇒ <code>[Frequency](#Frequency)</code>
-    * [.connect()](#ClientNexus+connect)
-    * [.reconnect()](#ClientNexus+reconnect)
-    * [.createAction(actionName)](#ClientNexus+createAction) ⇒ <code>function</code>
-    * [.createActions(actionNames)](#ClientNexus+createActions) ⇒ <code>object</code>
-    * [.registerFrequency(topic, options)](#ClientNexus+registerFrequency) ⇒ <code>[Frequency](#Frequency)</code>
-    * [.enablePersistence()](#ClientNexus+enablePersistence)
-    * [.disablePersistence()](#ClientNexus+disablePersistence)
+    * [.connecting](#ClientNexus+connecting) ⇒ <code>boolean</code>
+    * [.connected](#ClientNexus+connected) ⇒ <code>boolean</code>
   * _static_
     * [.ReactConnectMixin](#ClientNexus.ReactConnectMixin)
 
@@ -34,49 +36,40 @@ ensuring the Server dispatch can perform its delegation in a reactive, unidirect
 | [persistence.enabled] | <code>boolean</code> | <code>true</code> | should <ClientNexus> automatically try to reconnect on websocket "close" event |
 | [persistence.attempts] | <code>number</code> | <code>10</code> | how many times should <ClientNexus> attempt to reconnect after losing connection. 		This happens inside <ClientNexus>.reconnect, which can be called independently of the websocket "close" event if necessary |
 | [persistence.interval] | <code>number</code> | <code>3000</code> | how long to wait between reconnection attempts, in milliseconds |
-| [persistence.onDisconnect] | <code>function</code> | <code>noop</code> | called when <ClientNexus> disconnects with a close event from websocket |
 | [persistence.onConnecting] | <code>function</code> | <code>noop</code> | called when <ClientNexus> begins a reconnection attempt |
-| [persistence.onConnection] | <code>function</code> | <code>noop</code> | called when <ClientNexus> re-establishes connection to <ServerNexus> |
+| [persistence.onConnection] | <code>function</code> | <code>noop</code> | called when <ClientNexus> establishes a connection to <ServerNexus> |
+| [persistence.onDisconnect] | <code>function</code> | <code>noop</code> | called when <ClientNexus> disconnects with a close event from websocket |
+| [persistence.onReconnect] | <code>function</code> | <code>noop</code> | called when <ClientNexus> re-establishes a connection to <ServerNexus> after being dropped |
 | [persistence.onTimeout] | <code>function</code> | <code>noop</code> | called when reconnection attempts are exhausted |
 
 
 -
 
-<a name="ClientNexus+Hz"></a>
-### clientNexus.Hz ⇒ <code>[Frequency](#Frequency)</code>
-convenience alias for `registerFrequency`
-
-**Kind**: instance property of <code>[ClientNexus](#ClientNexus)</code>  
-**Returns**: <code>[Frequency](#Frequency)</code> - A Frequency instance  
-**Since**: 0.2.4  
-
--
-
 <a name="ClientNexus+connect"></a>
-### clientNexus.connect()
+### clientNexus.connect
 Set up frequency multiplexing and persistent connection (if enabled)
 
-**Kind**: instance method of <code>[ClientNexus](#ClientNexus)</code>  
+**Kind**: instance property of <code>[ClientNexus](#ClientNexus)</code>  
 
 -
 
 <a name="ClientNexus+reconnect"></a>
-### clientNexus.reconnect()
+### clientNexus.reconnect
 Set up frequency multiplexing after a disconnection with existing frequencies.
 Will attempt the reconnection with options passed to ClientNexus constructor as
 persistence options `attempts` and `interval`
 
-**Kind**: instance method of <code>[ClientNexus](#ClientNexus)</code>  
+**Kind**: instance property of <code>[ClientNexus](#ClientNexus)</code>  
 
 -
 
 <a name="ClientNexus+createAction"></a>
-### clientNexus.createAction(actionName) ⇒ <code>function</code>
+### clientNexus.createAction ⇒ <code>function</code>
 Create a function that sends a keyed object with actionType
 and payload to a `ServerNexus`. Use like you would use `Reflux.createAction` for
 a local store.
 
-**Kind**: instance method of <code>[ClientNexus](#ClientNexus)</code>  
+**Kind**: instance property of <code>[ClientNexus](#ClientNexus)</code>  
 **Returns**: <code>function</code> - An action that should be called with an object payload
 to be serialized and sent over the wire to the `ServerNexus`  
 
@@ -88,10 +81,10 @@ to be serialized and sent over the wire to the `ServerNexus`
 -
 
 <a name="ClientNexus+createActions"></a>
-### clientNexus.createActions(actionNames) ⇒ <code>object</code>
+### clientNexus.createActions ⇒ <code>object</code>
 Create a hash of action name keys with ClientNexus actions as values
 
-**Kind**: instance method of <code>[ClientNexus](#ClientNexus)</code>  
+**Kind**: instance property of <code>[ClientNexus](#ClientNexus)</code>  
 **Returns**: <code>object</code> - - a hash of action functions that accept an object payload to
 be serialized and sent to the server  
 
@@ -103,10 +96,10 @@ be serialized and sent to the server
 -
 
 <a name="ClientNexus+registerFrequency"></a>
-### clientNexus.registerFrequency(topic, options) ⇒ <code>[Frequency](#Frequency)</code>
+### clientNexus.registerFrequency ⇒ <code>[Frequency](#Frequency)</code>
 Create a new Frequency to subscribe to data streams from
 
-**Kind**: instance method of <code>[ClientNexus](#ClientNexus)</code>  
+**Kind**: instance property of <code>[ClientNexus](#ClientNexus)</code>  
 **Returns**: <code>[Frequency](#Frequency)</code> - A Frequency instance  
 
 | Param | Type | Default | Description |
@@ -121,22 +114,52 @@ Create a new Frequency to subscribe to data streams from
 -
 
 <a name="ClientNexus+enablePersistence"></a>
-### clientNexus.enablePersistence()
+### clientNexus.enablePersistence
 enable automatic reconnection on websocket "close" event,
 for use after persistence has been set by constructor
 
-**Kind**: instance method of <code>[ClientNexus](#ClientNexus)</code>  
+**Kind**: instance property of <code>[ClientNexus](#ClientNexus)</code>  
 **Since**: 0.3.0  
 
 -
 
 <a name="ClientNexus+disablePersistence"></a>
-### clientNexus.disablePersistence()
+### clientNexus.disablePersistence
 disable automatic reconnection on websocket "close" event,
 for use after persistence has been set by constructor
 
-**Kind**: instance method of <code>[ClientNexus](#ClientNexus)</code>  
+**Kind**: instance property of <code>[ClientNexus](#ClientNexus)</code>  
 **Since**: 0.3.0  
+
+-
+
+<a name="ClientNexus+Hz"></a>
+### clientNexus.Hz ⇒ <code>[Frequency](#Frequency)</code>
+convenience alias for `registerFrequency`
+
+**Kind**: instance property of <code>[ClientNexus](#ClientNexus)</code>  
+**Returns**: <code>[Frequency](#Frequency)</code> - A Frequency instance  
+**Since**: 0.2.4  
+
+-
+
+<a name="ClientNexus+connecting"></a>
+### clientNexus.connecting ⇒ <code>boolean</code>
+is the <ClientNexus> in the process of connecting
+
+**Kind**: instance property of <code>[ClientNexus](#ClientNexus)</code>  
+**Read only**: true  
+**Since**: 0.3.1  
+
+-
+
+<a name="ClientNexus+connected"></a>
+### clientNexus.connected ⇒ <code>boolean</code>
+is the <ClientNexus> currently connected to the Server
+
+**Kind**: instance property of <code>[ClientNexus](#ClientNexus)</code>  
+**Read only**: true  
+**Since**: 0.3.1  
 
 -
 
