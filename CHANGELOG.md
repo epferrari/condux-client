@@ -1,9 +1,27 @@
 # CHANGELOG
 
+## 0.4.0
+
+### Package Name change (!!)
+
+- reflux-nexus-client => condux-client
+- published to npm
+- **condux** = conduit + flux.
+
+### Additions
+
+- *added* static constant `ConduxClient.CONNECTED`
+- *added* static constant `ConduxClient.CONNECTING`
+- *added* static constant `ConduxClient.DISCONNECTED`
+
+### Misc
+
+- better API documentation
+
 
 ## 0.3.1
 
-- added `connected` and `connecting` getter methods to `<ClientNexus>`
+- *added* `connected` and `connecting` getter methods to `<ClientNexus>`
 - bug fixes in `<ClientNexus>.reconnect`
 
 
@@ -18,8 +36,8 @@ dependency of reflux-nexus-client, and `<ClientNexus>.connect` creates the SockJ
 url passed to the constructor.
 - `ClientNexus.Connect` is now `ClientNexus.ReactConnectMixin`
 
-### Non Breaking Changes
+### Non-Breaking Changes
 
-- the `ClientNexus` constructor now accepts a second argument, an object of persistence options. See [README](README.md/#new_ClientNexus_new)
-- `disablePersistence` method was added to the `ClientNexus` prototype to disable automatic reconnection attempts when websocket closes
-- `enablePersistence` method was added to the `ClientNexus` prototype to enable automatic reconnection attempts when websocket closes
+- *added* connection persistence. The `ClientNexus` constructor now accepts a second argument, an object of persistence options. See [README](README.md/#new_ClientNexus_new)
+- *added* instance method `disablePersistence` method was added to the `ClientNexus` prototype to disable automatic reconnection attempts when websocket closes
+- *added* instance method `enablePersistence` method was added to the `ClientNexus` prototype to enable automatic reconnection attempts when websocket closes
