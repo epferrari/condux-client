@@ -1,7 +1,7 @@
 {
 	"name": "condux-client",
 	"version": "0.4.0",
-	"description": "An over-the-wire implementation of Reflux using Sock.js with a mixin for React components. Sister package to `condux`",
+	"description": "Client half of `condux`, an over-the-wire unidirectional data-flow architecture utilizing Reflux as the flux pattern implementation and SockJS as the websocket implementation.",
 	"main": "index.js",
 	"scripts": {
 		"test": "echo \"Error: no test specified\" && exit 1",
@@ -18,11 +18,13 @@
 		"url": "git+https://epferrari@github.com/epferrari/condux-client.git"
 	},
 	"keywords": [
-		"Reflux",
-		"React",
+		"reflux",
+		"react",
 		"websocket",
 		"over-the-wire",
-		"Sockjs",
+		"reactive",
+		"unidirectional",
+		"sockjs",
 		"client"
 	],
 	"author": "Ethan Ferrari",
