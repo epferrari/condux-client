@@ -1,12 +1,12 @@
 {
-	"name": "reflux-nexus-client",
-	"version": "0.3.1",
-	"description": "An over-the-wire implementation of Reflux using Sock.js with a mixin for React components. Sister package to `reflux-nexus`",
-	"main": "reflux-nexus-client.js",
+	"name": "condux-client",
+	"version": "0.4.0",
+	"description": "An over-the-wire implementation of Reflux using Sock.js with a mixin for React components. Sister package to `condux`",
+	"main": "index.js",
 	"scripts": {
 		"test": "echo \"Error: no test specified\" && exit 1",
 		"lint": "eslint ./src",
-		"docs": "jsdoc2md ./lib/*.js  --global-index-format none --separators true > README.md",
+		"docs": "jsdoc2md ./lib/*.js  --global-index-format none --separators true > ./docs/API.md && cat ./docs/index.md ./docs/API.md > README.md",
 		"preclean": "npm run lint",
 		"clean": "rm -rf ./lib/*",
 		"prebuild": "npm run clean",
@@ -15,7 +15,7 @@
 	},
 	"repository": {
 		"type": "git",
-		"url": "git+https://epferrari@github.com/epferrari/reflux-nexus-client.git"
+		"url": "git+https://epferrari@github.com/epferrari/condux-client.git"
 	},
 	"keywords": [
 		"Reflux",
@@ -28,9 +28,9 @@
 	"author": "Ethan Ferrari",
 	"license": "MIT",
 	"bugs": {
-		"url": "https://github.com/epferrari/reflux-nexus-client/issues"
+		"url": "https://github.com/epferrari/condux-client/issues"
 	},
-	"homepage": "https://github.com/epferrari/reflux-nexus-client#readme",
+	"homepage": "https://github.com/epferrari/condux-client#readme",
 	"devDependencies": {
 		"babel": "^5.8.21",
 		"babel-eslint": "^4.0.10",
