@@ -24,11 +24,11 @@ var typeOf = function(obj) {
 
 /**
 * @desc A read-only stream of data from the server on `topic`. Split from a single websocket connection.
-* Frequencies cannot be directly instansiated with the new operator; they are created with `<ClientNexus>.registerFrequency`
-* or the shorthand `<ClientNexus>.Hz`.
+* Frequencies cannot be directly instansiated with the new operator; they are created with `<ConduxClient>.registerFrequency`
+* or the shorthand `<ConduxClient>.Hz`.
 * @constructor
 * @param {string} topic - name handle of the Frequency, ex `/chat`
-* @param {object} nexus - the ClientNexus instance that owns the Frequency
+* @param {object} conduxClient - the ConduxClient instance that owns the Frequency
 * @param {object} options
 * @param {function} [options.handleConnection=Frequency.prototype._hydrateData] - handle initial
 * 	data flowing into `Data` on connection
@@ -43,7 +43,7 @@ var typeOf = function(obj) {
 * @protected
 */
 
-function Frequency(topic,nexus,options){
+function Frequency(topic,conduxClient,options){
 
 	this.isConnected = false;
 
@@ -56,17 +56,16 @@ function Frequency(topic,nexus,options){
 
 	options = merge({},defaults,options);
 
-	/* send subscription request to the server nexus, call at end of constructor*/
+	/* send subscription request to the Condux server, call at end of constructor*/
 	this._subscribe = function(){
-		nexus.joinAndSend("sub",topic,options.provideCredentials());
+		conduxClient.joinAndSend("sub",topic,options.provideCredentials());
 	}
 
 	this._subscriptions_ = {};
 	this._responseListeners_ = {};
 
 	/**
-	* @desc A `bluebird` promise fulfilled when the Frequency connects with the
-	* Server Nexus
+	* @desc A `bluebird` Promise fulfilled when the Frequency connects with the Condux Server
 	*/
 	this.didConnect = new Promise(resolve => {
 		this._connectionToken = this.addListener(this,{
@@ -78,7 +77,7 @@ function Frequency(topic,nexus,options){
 			// unsubscribe from server updates onclose
 			close: function(){
 				this.isConnected = false;
-				nexus.joinAndSend("uns",this.topic);
+				conduxClient.joinAndSend("uns",this.topic);
 			}
 		});
 	});
@@ -88,7 +87,7 @@ function Frequency(topic,nexus,options){
 	* @instance
 	* @memberof Frequency
 	* @readonly
-	* @desc The name of the frequency, should match a Channel on the Server Nexus
+	* @desc The name of the frequency, should match a Channel on the Condux server
 	*/
 
 	/**
@@ -96,13 +95,12 @@ function Frequency(topic,nexus,options){
 	* @instance
 	* @memberof Frequency
 	* @readonly
-	* @desc A hash of all the Frequencies on the ClientNexus instance that created
-	* this Frequency
+	* @desc A hash of all the Frequencies on the ConduxClient instance that created this Frequency
 	*/
 	Object.defineProperties(this,{
 		"topic": { value: topic },
-		"band": { value: nexus.band },
-		"__is_reflux_nexus_frequency__": { value: true }
+		"band": { value: conduxClient.band },
+		"__is_condux_frequency__": { value: true }
 	});
 
 
@@ -171,11 +169,11 @@ function Frequency(topic,nexus,options){
 
 
 	/**
-	* @desc the client side of Nexus request API. Sends constraints to a server-side Channel,
-	* along with a unique request token. Adds a Promise to `this._responseListeners_`.
-	* When the Channel responds, it resolves the promise and removes itself from
-	* `this._responseListeners_`
-	* @param {object} constraints - developer-defined key:value map of constraints to send server-side Channel
+	* @desc The client side of Condux request API. Sends constraints to a Condux server Channel implementing the `response` interface,
+	* Sent with a silent, unique request token that ensures resolution of the Promise created when the Condux server responds.
+	* Adds the Promise to `this._responseListeners_`. When the Condux server Channel responds, the resolved Promise's thenables are called
+	* and the Promise itself is removed from the `this._responseListeners_` hash.
+	* @param {object} constraints - developer-defined key:value map of constraints to send Condux server Channel
 	* @returns {Promise}
 	*/
 	this.request = (constraints) => {
@@ -202,13 +200,13 @@ function Frequency(topic,nexus,options){
 				if(!this.isConnected){
 					reject('Frequency is no longer connected');
 				}else{
-					nexus.joinAndSend("req",this.topic, JSON.stringify(req));
+					conduxClient.joinAndSend("req",this.topic, JSON.stringify(req));
 				}
 			});
 		});
 	};
 
-	nexus.didConnect.then(() => this._subscribe());
+	conduxClient.didConnect.then(() => this._subscribe());
 
 }
 
@@ -289,7 +287,7 @@ Frequency.prototype = {
 	* define a custom `updateWith(prevData,message)` method by passing it as an
 	* option on construct. This default behavior is so that you could simply send
 	* an updated collection from your server and have the state maintained on the
-	* client with no additional steps.
+	* conduxClient with no additional steps.
 	* @param {any} message - sent from server on topic channel
 	* @param {object|array} previousData - the last Data state of the Frequency
 	* @private
@@ -338,7 +336,7 @@ Frequency.prototype = {
 	},
 
 	/**
-	* @desc Shut down the Frequency, unsubscribing from ServerNexus messages on topic
+	* @desc Shut down the Frequency, unsubscribing from Condux server's channel broadcasts on this topic
 	*/
 	close(){
 		setTimeout( () => this.broadcast("close"),0 );

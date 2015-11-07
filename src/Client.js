@@ -22,27 +22,24 @@ var REGISTRATIONS = "/REGISTRATIONS",
 		CLIENT_ACTIONS = "/CLIENT_ACTIONS";
 
 /**
-* @desc A client-side companion to `reflux-nexus` on the server. Use to call actions that will be listened to
-* by Reflux stores on the server. Create actions Reflux-like actions with `<ClientNexus>.createAction` and `<ClientNexus>.createActions`.
-* All actions are called on the main `CLIENT_ACTIONS` channel, which handles all inbound action traffic from the client nexus to the server nexus,
-* ensuring the Server dispatch can perform its delegation in a reactive, unidirectional way.
+* @desc create a Condux Client instance
 * @param {string} url - a url of your server to pass into SockJS. Ensure the prefix `http://yoururl.com:port{/prefix}` is `/reflux-nexus`
 * to connect to the `reflux-nexus` instance on your node server, or change the prefix on your server accordingly
 * @param {object} persistence
-* @param {boolean} [persistence.enabled=true] - should <ClientNexus> automatically try to reconnect on websocket "close" event
-* @param {number} [persistence.attempts=10] - how many times should <ClientNexus> attempt to reconnect after losing connection.
-* 		This happens inside <ClientNexus>.reconnect, which can be called independently of the websocket "close" event if necessary
+* @param {boolean} [persistence.enabled=true] - should <ConduxClient> automatically try to reconnect on websocket "close" event
+* @param {number} [persistence.attempts=10] - how many times should <ConduxClient> attempt to reconnect after losing connection.
+* 		This happens inside <ConduxClient>.reconnect, which can be called independently of the websocket "close" event if necessary
 * @param {number} [persistence.interval=3000] - how long to wait between reconnection attempts, in milliseconds
-* @param {function} [persistence.onConnecting=noop] - called when <ClientNexus> begins a reconnection attempt
-* @param {function} [persistence.onConnection=noop] - called when <ClientNexus> establishes a connection to <ServerNexus>
-* @param {function} [persistence.onDisconnect=noop] - called when <ClientNexus> disconnects with a close event from websocket
-* @param {function} [persistence.onReconnect=noop] - called when <ClientNexus> re-establishes a connection to <ServerNexus> after being dropped
+* @param {function} [persistence.onConnecting=noop] - called when <ConduxClient> begins a reconnection attempt
+* @param {function} [persistence.onConnection=noop] - called when <ConduxClient> establishes a connection to <ServerNexus>
+* @param {function} [persistence.onDisconnect=noop] - called when <ConduxClient> disconnects with a close event from websocket
+* @param {function} [persistence.onReconnect=noop] - called when <ConduxClient> re-establishes a connection to <ServerNexus> after being dropped
 * @param {function} [persistence.onTimeout=noop] - called when reconnection attempts are exhausted
 * @constructor
 */
-function ClientNexus(url,persistence){
+function ConduxClient(url,persistence){
 
-	// use Singleton to ensure only one ClientNexus
+	// use Singleton to ensure only one ConduxClient
 	if(Singleton) return Singleton;
 
 	// defaults for persistent connection
@@ -68,13 +65,12 @@ function ClientNexus(url,persistence){
 }
 
 
-ClientNexus.prototype = {
+ConduxClient.prototype = {
 
 	/**
-	* @name connect
 	* @desc Set up frequency multiplexing and persistent connection (if enabled)
 	* @instance
-	* @memberof ClientNexus
+	* @memberof ConduxClient
 	*/
 	connect(){
 		// call event hook
@@ -116,12 +112,11 @@ ClientNexus.prototype = {
 
 
 	/**
-	* @name reconnect
 	* @desc Set up frequency multiplexing after a disconnection with existing frequencies.
-	* Will attempt the reconnection with options passed to ClientNexus constructor as
+	* Will attempt the reconnection with options passed to ConduxClient constructor as
 	* persistence options `attempts` and `interval`
 	* @instance
-	* @memberof ClientNexus
+	* @memberof ConduxClient
 	*/
 	reconnect(){
 		if(!connecting){
@@ -139,7 +134,7 @@ ClientNexus.prototype = {
 					// resets `this.sock`
 					// resets `this.didConnect` to a new Promise resolved by `this.sock`
 					this.connect();
-					var clientNexus = this;
+					var ConduxClient = this;
 					// re-subscribe all frequencies
 					each(this.band, (fq) => {
 						fq.removeListener(fq._connectionToken);
@@ -154,7 +149,7 @@ ClientNexus.prototype = {
 								// unsubscribe from server updates onclose
 								close: function(){
 									fq.isConnected = false;
-									clientNexus.joinAndSend("uns",fq.topic);
+									ConduxClient.joinAndSend("uns",fq.topic);
 								}
 							});
 						});
@@ -250,7 +245,6 @@ ClientNexus.prototype = {
 	},
 
 	/**
-	* @name createAction
 	* @desc Create a function that sends a keyed object with actionType
 	* and payload to a `ServerNexus`. Use like you would use `Reflux.createAction` for
 	* a local store.
@@ -258,7 +252,7 @@ ClientNexus.prototype = {
 	* @returns {function} An action that should be called with an object payload
 	* to be serialized and sent over the wire to the `ServerNexus`
 	* @instance
-	* @memberof ClientNexus
+	* @memberof ConduxClient
 	*/
 	createAction(actionName){
 		return payload => {
@@ -271,14 +265,13 @@ ClientNexus.prototype = {
 	},
 
 	/**
-	* @name createActions
-	* @desc Create a hash of action name keys with ClientNexus actions as values
+	* @desc Create a hash of action name keys with ConduxClient actions as values
 	* @param {string[]} actionNames - create a hash of actions, use like you would
 	* `Reflux.createActions` for a local store.
 	* @returns {object} - a hash of action functions that accept an object payload to
 	* be serialized and sent to the server
 	* @instance
-	* @memberof ClientNexus
+	* @memberof ConduxClient
 	*/
 	createActions(actionNames){
 		return actionNames.reduce( (accum,actionName) => {
@@ -288,7 +281,6 @@ ClientNexus.prototype = {
 	},
 
 	/**
-	* @name registerFrequency
 	* @desc Create a new Frequency to subscribe to data streams from
 	* @param {string} topic - The Frequency's name handle
 	* @param {object} options - hash of options
@@ -298,7 +290,7 @@ ClientNexus.prototype = {
 	* 	(if required by the Channel to connect, otherwise leave blank)
 	* @returns {Frequency} A Frequency instance
 	* @instance
-	* @memberof ClientNexus
+	* @memberof ConduxClient
 	*/
 	registerFrequency(topic,options){
 		let frequency = this.band[topic];
@@ -310,11 +302,10 @@ ClientNexus.prototype = {
 	},
 
 	/**
-	* @name enablePersistence
 	* @desc enable automatic reconnection on websocket "close" event,
 	* for use after persistence has been set by constructor
 	* @instance
-	* @memberof ClientNexus
+	* @memberof ConduxClient
 	* @since 0.3.0
 	*/
 	enablePersistence(){
@@ -325,12 +316,11 @@ ClientNexus.prototype = {
 	},
 
 	/**
-	* @name disablePersistence
 	* @desc disable automatic reconnection on websocket "close" event,
 	* for use after persistence has been set by constructor
 	* @since 0.3.0
 	* @instance
-	* @memberof ClientNexus
+	* @memberof ConduxClient
 	*/
 	disablePersistence(){
 		if(this._persistence.enabled){
@@ -341,9 +331,8 @@ ClientNexus.prototype = {
 
 	/**
 	* convenience alias for `registerFrequency`
-	* @name Hz
 	* @instance
-	* @memberof ClientNexus
+	* @memberof ConduxClient
 	* @returns {Frequency} A Frequency instance
 	* @since 0.2.4
 	*/
@@ -355,8 +344,8 @@ ClientNexus.prototype = {
 	/**
 	* @name connecting
 	* @instance
-	* @memberof ClientNexus
-	* @desc is the <ClientNexus> in the process of connecting
+	* @memberof ConduxClient
+	* @desc is the <ConduxClient> in the process of connecting
 	* @returns {boolean}
 	* @readonly
 	* @since 0.3.1
@@ -368,8 +357,8 @@ ClientNexus.prototype = {
 	/**
 	* @name connected
 	* @instance
-	* @memberof ClientNexus
-	* @desc is the <ClientNexus> currently connected to the Server
+	* @memberof ConduxClient
+	* @desc is the <ConduxClient> currently connected to the Server
 	* @returns {boolean}
 	* @since 0.3.1
 	* @readonly
@@ -384,20 +373,20 @@ ClientNexus.prototype = {
 
 /**
 * @callback connectionHandler
-* @desc A callback for the ClientNexus.Connect mixin triggered when the component initially tunes into a Frequency
+* @desc A callback for the ConduxClient.Connect mixin triggered when the component initially tunes into a Frequency
 * @param {object|array} hydration - the tuned-in Frequency's `datastream` when the component begins listening
 */
 
 /**
 * @callback messageHandler
-* @desc A callback for the ClientNexus.Connect mixin triggered when Frequency receives server data
+* @desc A callback for the ConduxClient.Connect mixin triggered when Frequency receives server data
 * @param {object|array} message - the tuned-in Frequency's latest message from the server
 * @param {object|array} datastream - a copy of the Frequency's full datastream
 */
 
 /**
 * @callback closeHandler
-* @desc A callback for the ClientNexus.Connect mixin triggered when Frequency receives server data
+* @desc A callback for the ConduxClient.Connect mixin triggered when Frequency receives server data
 */
 
 
@@ -405,24 +394,22 @@ ClientNexus.prototype = {
 * @name ReactConnectMixin
 * @static
 * @desc Convenience Mixin for a React Component, giving it a `tuneIn` method that
-* that allows the component to subscribe to a `ClientNexus Frequency` with a handler.
+* that allows the component to subscribe to a `ConduxClient Frequency` with a handler.
 * Conveniently removes all Component handlers from the Frequency on `componentWillUnmount`
 * @mixin
-* @memberof ClientNexus
+* @memberof ConduxClient
 */
-ClientNexus.ReactConnectMixin = {
+ConduxClient.ReactConnectMixin = {
 	componentWillMount(){
 		this._nexusTokens = {};
 		/**
 		* @name tuneInto
-		* @extends React.Component
-		* @desc Tune into a ClientNexus `Frequency` and handle Frequency lifecyle events `connection`,`message`, and `close`
+		* @desc exposed to React.Component via `ConduxClient.ReactConnectMixin` Tune into a ConduxClient `Frequency` and handle Frequency lifecyle events `connection`,`message`, and `close`
 		* @param {object} frequency - a Frequency name handle
 		* @param {object} handlers - a hash of callbacks for Frequency's lifecycle events
 		* @param {connectionHandler} [handlers.connection]
 		* @param {messageHandler} [handlers.message]
 		* @param {closeHandler} [handlers.close]
-		* @implements ClientNexus.Connect
 		*/
 		this.tuneInto = (frequency,handlers) => {
 			listenToFrequency.call(this,frequency,handlers);
@@ -438,7 +425,7 @@ ClientNexus.ReactConnectMixin = {
 /**
 * @name listenToFrequency
 * @desc Helper function to subscribe the implementing object to a `Frequency` with listener callbacks
-* @param {object} frequency - The `ClientNexus.Frequency` to being listened to
+* @param {object} frequency - The `<ConduxClient>.Frequency` to being listened to
 * @param {object} handlers - a hash of callbacks for Frequency's lifecycle events
 * @param {connectionHandler} handlers.connection
 * @param {messageHandler} handlers.message
@@ -448,7 +435,7 @@ ClientNexus.ReactConnectMixin = {
 function listenToFrequency(frequency,handlers){
 
 	if(typeOf(frequency) === "string") frequency = Singleton.band(frequency);
-	if(!frequency || !frequency.__is_reflux_nexus_frequency__){
+	if(!frequency || !frequency.__is_condux_frequency__){
 		throw new TypeError('first argument to "tuneInto" must be instance of Frequency');
 	}
 
@@ -464,4 +451,49 @@ function _broadcast(frequency,message,payload){
 	setTimeout(() => frequency.broadcast(message,payload),0);
 }
 
-export {ClientNexus as default};
+
+/**
+* @since 0.4.0
+* @name DISCONNECTED
+* @memberof ConduxClient
+* @static
+* @readonly
+*/
+Object.defineProperty(ConduxClient,'DISCONNECTED',{
+	value: 0,
+	writable: false,
+	configurable: false,
+	enumerable: false
+});
+
+/**
+* @since 0.4.0
+* @name CONNECTING
+* @memberof ConduxClient
+* @constant
+* @static
+* @readonly
+*/
+Object.defineProperty(ConduxClient,'CONNECTING',{
+	value: 0,
+	writable: false,
+	configurable: false,
+	enumerable: false
+});
+
+/**
+* @since 0.4.0
+* @name CONNECTED
+* @memberof ConduxClient
+* @readonly
+* @static
+* @constant
+*/
+Object.defineProperty(ConduxClient,'CONNECTED',{
+	value: 2,
+	writable: false,
+	configurable: false,
+	enumerable: false
+});
+
+export {ConduxClient as default};
