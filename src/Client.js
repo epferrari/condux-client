@@ -434,7 +434,7 @@ ConduxClient.ReactConnectMixin = {
 */
 function listenToFrequency(frequency,handlers){
 
-	if(typeOf(frequency) === "string") frequency = Singleton.band(frequency);
+	if(typeOf(frequency) === "string") frequency = Singleton.band[frequency];
 	if(!frequency || !frequency.__is_condux_frequency__){
 		throw new TypeError('first argument to "tuneInto" must be instance of Frequency');
 	}
