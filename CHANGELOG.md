@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## 0.4.1
+
+- bug fix in `<Frequency>.addListener`
+
 ## 0.4.0
 
 ### Package Name change (!!)
