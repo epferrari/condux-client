@@ -313,7 +313,7 @@ Frequency.prototype = {
 	*/
 	addListener(listener,handlers){
 		var token = uniqId();
-		sub = reduce(handlers,(r,fn,name)=> {
+		var sub = reduce(handlers,(r,fn,name)=> {
 			if(typeOf(fn) === 'function'){
 				r[name] = fn.bind(listener);
 			}
