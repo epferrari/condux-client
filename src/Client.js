@@ -157,7 +157,7 @@ ConduxClient.prototype = {
 			.then(() => {
 				connecting = false;
 				this.persistence.onConnection();
-				sock.addEventListener("close",() => tthis.persistence.onDisconnect());
+				sock.addEventListener("close",() => this.persistence.onDisconnect());
 				if(this.persistence.enabled){
 					// reset up a persistent connection, aka attempt to reconnect if the connection closes
 					sock.addEventListener("close",this.reconnect.bind(this));
