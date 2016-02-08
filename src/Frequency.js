@@ -228,11 +228,10 @@ Frequency.prototype = {
 		this._hydrate_(data);
 		Promise.all(map(this._subscriptions_, sub => {
 			return new Promise( (resolve,reject) => {
-				let {listener,handlers} = sub;
 				/* deprecated - onConnection handlers when registering listeners, removing in 1.0 */
-				handlers.onConnection && handlers.onConnection.apply(listener,[this.Data]);
+				sub.onConnection && sub.onConnection(this.Data);
 				/* updated API as of 0.2.4 */
-				handlers.connection && handlers.connection.apply(listener,[this.Data]);
+				sub.connection && sub.connection(this.Data);
 				resolve();
 			});
 		}));
@@ -247,11 +246,10 @@ Frequency.prototype = {
 		// second arg is the Frequency's cached datastream
 		Promise.all(map(this._subscriptions_, sub => {
 			return new Promise( (resolve,reject) => {
-				let {listener,handlers} = sub;
 				/* deprecated - onMessage handlers when registering listeners, removing in 1.0 */
-				handlers.onMessage && handlers.onMessage.apply(listener,[msg,this.Data]);
+				sub.onMessage && sub.onMessage(msg,this.Data);
 				/* updated API as of 0.2.4 */
-				handlers.message && handlers.message.apply(listener,[msg,this.Data]);
+				sub.message && sub.message(msg,this.Data);
 				resolve();
 			});
 		}));
@@ -273,11 +271,10 @@ Frequency.prototype = {
 		delete this.band[this.topic]
 		Promise.all(map(this._subscriptions_, sub => {
 			return new Promise(function(resolve,reject){
-				let {listener,handlers} = sub;
 				/* deprecated - onClose handlers for registering listeners, removing in 1.0 */
-				handlers.onClose && handlers.onClose.apply(listener);
+				sub.onClose && sub.onClose();
 				/* updated API as of 0.2.4 */
-				handlers.close && handlers.close.apply(listener);
+				sub.close && sub.close();
 				resolve();
 			});
 		}));
@@ -316,12 +313,17 @@ Frequency.prototype = {
 	*/
 	addListener(listener,handlers){
 		var token = uniqId();
-		var h = handlers;
-		this._subscriptions_[token] = {listener,handlers};
+		sub = reduce(handlers,(r,fn,name)=> {
+			if(typeOf(fn) === 'function'){
+				r[name] = fn.bind(listener);
+			}
+			return r;
+		},{});
+		this._subscriptions_[token] = sub;
 		/* deprecated - onConnection handler for listeners, removing for 1.0 */
-		if(this.isConnected && h.onConnection) h.onConnection.call(listener,this.Data);
+		if(this.isConnected && sub.onConnection) sub.onConnection(this.Data);
 		/* new API as of 0.2.4 */
-		if(this.isConnected && h.connection) h.connection.call(listener,this.Data);
+		if(this.isConnected && sub.connection) sub.connection(this.Data);
 		return token;
 	},
 
