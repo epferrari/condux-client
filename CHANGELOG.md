@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## 0.4.2
+
+- added `persistence` getter to `<ConduxClient>` instance
+- added `updatePersistence` method to `<ConduxClient>` instance
+- `persistence.interval` can now accept a function that can calculate a delay between reconnection attempts based on number of previous attempts
+- `enablePersistence` and `disablePersistence` both modified to use `updatePersistence` method
+
 ## 0.4.1
 
 - bug fix in `<Frequency>.addListener`
