@@ -6,6 +6,7 @@
 - added `updatePersistence` method to `<ConduxClient>` instance
 - `persistence.interval` can now accept a function that can calculate a delay between reconnection attempts based on number of previous attempts
 - `enablePersistence` and `disablePersistence` both modified to use `updatePersistence` method
+- internal refactor of `<Frequency>.addListener` to auto-bind callbacks to the listener instead of using apply() at call time
 
 ## 0.4.1
 
