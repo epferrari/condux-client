@@ -9,17 +9,38 @@ import SockJS
 import Promise
 	from 'bluebird';
 
-import {pull,merge,each}
+import {pull,merge,each,reduce}
 	from '../vendor/lodash_merge.pull.map.each.reduce.uniq.js';
 
 var typeOf = function(obj) {
 	return ({}).toString.call(obj).match(/\s([a-zA-Z]+)/)[1].toLowerCase();
 };
 
+var pick = function(obj,props){
+	return reduce(obj,function(r,val,key){
+		if(props.indexOf(key) !== -1){
+			r[key] = val;
+		}
+		return r;
+	},{});
+};
+
 var connecting = false;
 var Singleton;
 var REGISTRATIONS = "/REGISTRATIONS",
 		CLIENT_ACTIONS = "/CLIENT_ACTIONS";
+
+// defaults for persistent connection
+var defaultPersistence = {
+	enabled: true,
+	onDisconnect: function(){},
+	onConnecting: function(){},
+	onConnection: function(){},
+	onReconnect: function(){},
+	onTimeout: function(){},
+	attempts: 10,
+	interval: 3000
+};
 
 /**
 * @desc create a Condux Client instance
@@ -29,7 +50,7 @@ var REGISTRATIONS = "/REGISTRATIONS",
 * @param {boolean} [persistence.enabled=true] - should <ConduxClient> automatically try to reconnect on websocket "close" event
 * @param {number} [persistence.attempts=10] - how many times should <ConduxClient> attempt to reconnect after losing connection.
 * 		This happens inside <ConduxClient>.reconnect, which can be called independently of the websocket "close" event if necessary
-* @param {number} [persistence.interval=3000] - how long to wait between reconnection attempts, in milliseconds
+* @param {number|function} [persistence.interval=3000] - how long to wait between reconnection attempts, in milliseconds. If passed a function, the function will be called with the number of reconnection attempts aleady made, and should return a number in milliseconds
 * @param {function} [persistence.onConnecting=noop] - called when <ConduxClient> begins a reconnection attempt
 * @param {function} [persistence.onConnection=noop] - called when <ConduxClient> establishes a connection to <ServerNexus>
 * @param {function} [persistence.onDisconnect=noop] - called when <ConduxClient> disconnects with a close event from websocket
@@ -42,19 +63,54 @@ function ConduxClient(url,persistence){
 	// use Singleton to ensure only one ConduxClient
 	if(Singleton) return Singleton;
 
-	// defaults for persistent connection
-	let p = {
-		enabled: true,
-		onDisconnect: function(){},
-		onConnecting: function(){},
-		onConnection: function(){},
-		onReconnect: function(){},
-		onTimeout: function(){},
-		attempts: 10,
-		interval: 3000
+	var p = pick( merge({},defaultPersistence,persistence), Object.keys(defaultPersistence) );
+
+	/**
+	* @name persistence
+	* @returns {object} current persistence options
+	* @instance
+	* @readonly
+	* @memberof ConduxClient
+	* @since 0.4.2
+	*/
+	Object.defineProperty(this,'persistence',{
+		get: function(){
+			return p;
+		},
+		enumerable: false,
+		configurable: false
+	});
+
+	/**
+	* @name updatePersistence
+	* @description Update the current persistence options. If `<ConduxClient>` is connecting and the `onConnecting` hook was updated, it will immediately call the new onConnecting function
+	* @returns {object} updated persistence options
+	* @method
+	* @instance
+	* @memberof ConduxClient
+	* @since 0.4.2
+	*/
+	this.updatePersistence = function(options){
+		let prevOnConnecting = p.onConnecting;
+		let prevEnabled = p.enabled;
+		p = pick( merge({},p,options), Object.keys(p) );
+
+		// persistence was enabled
+		if(!prevEnabled && p.enabled){
+			this.sock.addEventListener("close",this.reconnect.bind(this));
+		}
+
+		// persistence was disabled
+		if(prevEnabled && !p.enabled){
+			this.sock.removeEventListener("close",this.reconnect.bind(this));
+		}
+
+		if((prevOnConnecting !== p.onConnecting) && connecting){
+			p.onConnecting();
+		}
+		return p;
 	};
 
-	this._persistence = merge({},p,persistence);
 	this._queue = [];
 	this.url = url;
 	this.band = {};
@@ -74,7 +130,7 @@ ConduxClient.prototype = {
 	*/
 	connect(){
 		// call event hook
-		this._persistence.onConnecting();
+		this.persistence.onConnecting();
 		// connect to websocket
 		connecting = true;
 		var sock = this.sock = new SockJS(this.url);
@@ -100,9 +156,9 @@ ConduxClient.prototype = {
 			})
 			.then(() => {
 				connecting = false;
-				this._persistence.onConnection();
-				sock.addEventListener("close",() => this._persistence.onDisconnect());
-				if(this._persistence.enabled){
+				this.persistence.onConnection();
+				sock.addEventListener("close",() => tthis.persistence.onDisconnect());
+				if(this.persistence.enabled){
 					// reset up a persistent connection, aka attempt to reconnect if the connection closes
 					sock.addEventListener("close",this.reconnect.bind(this));
 				}
@@ -120,58 +176,76 @@ ConduxClient.prototype = {
 	*/
 	reconnect(){
 		if(!connecting){
-			var attempts = this._persistence.attempts;
+			var attemptsMade = 0;
+			var attemptsRemaining = this.persistence.attempts;
 			// immediately try to reconnect
 			var timeout = setTimeout(() => attemptReconnection(),200);
 
 			var attemptReconnection = function(){
-				if(attempts){
+				if(!attemptsRemaining){
+					// Failure, stop trying to reconnect
+					this.persistence.onTimeout();
+				} else {
+					let delay;
+					let {interval} = this.persistence;
+
 					// setup to try again after interval
-					timeout = setTimeout(() => attemptReconnection(),this._persistence.interval);
-					attempts--;
+					if(typeof interval == 'number'){
+						delay = interval
+					} else if(typeof interval === 'function'){
+						delay = interval(attemptsMade);
+					}
+
+					timeout = setTimeout(() => attemptReconnection(),delay);
+					attemptsMade++;
+					attemptsRemaining--;
+
 
 					// attempt to re-establish the websocket connection
 					// resets `this.sock`
 					// resets `this.didConnect` to a new Promise resolved by `this.sock`
 					this.connect();
-					var ConduxClient = this;
+
 					// re-subscribe all frequencies
-					each(this.band, (fq) => {
-						fq.removeListener(fq._connectionToken);
-						// create new didConnect Promise for each frequency
-						fq.didConnect = new Promise(resolve => {
-							fq._connectionToken = fq.addListener(fq,{
-								// resolve frequency's didConnect Promise on re-connection
-								connection: function(){
-									fq.isConnected = true;
-									resolve();
-								},
-								// unsubscribe from server updates onclose
-								close: function(){
-									fq.isConnected = false;
-									ConduxClient.joinAndSend("uns",fq.topic);
-								}
-							});
-						});
-						// resubscribe after ensuring new websocket connection
-						this.didConnect.then(() => fq._subscribe());
-					});
+					_resubscribeFrequencies()
 
 					// re-apply the message handling multiplexer
 					this.sock.addEventListener("message",e => this._multiplex(e));
 
 					// Success, stop trying to reconnect,
 					this.didConnect.then(() => {
-						attempts = 0;
+						attemptsRemaining = 0;
 						clearTimeout(timeout);
-						this._persistence.onReconnect();
+						this.persistence.onReconnect();
 					});
-				} else {
-					// Failure, stop trying to reconnect
-					this._persistence.onTimeout();
 				}
 			}.bind(this);
+			// end function attemptReconnection
 		}
+	},
+
+	_resubscribeFrequencies(){
+		var activeConduxClient = this;
+		each(this.band, (fq) => {
+			fq.removeListener(fq._connectionToken);
+			// create new didConnect Promise for each frequency
+			fq.didConnect = new Promise(resolve => {
+				fq._connectionToken = fq.addListener(fq,{
+					// resolve frequency's didConnect Promise on re-connection
+					connection: function(){
+						fq.isConnected = true;
+						resolve();
+					},
+					// unsubscribe from server updates onclose
+					close: function(){
+						fq.isConnected = false;
+						activeConduxClient.joinAndSend("uns",fq.topic);
+					}
+				});
+			});
+			// resubscribe after ensuring new websocket connection
+			this.didConnect.then(() => fq._subscribe());
+		});
 	},
 
 	/**
@@ -309,10 +383,7 @@ ConduxClient.prototype = {
 	* @since 0.3.0
 	*/
 	enablePersistence(){
-		if(!this._persistence.enabled){
-			this.sock.addEventListener("close",this.reconnect.bind(this));
-			this._persistence.enabled = true;
-		}
+		this.updatePersistence({enabled: true});
 	},
 
 	/**
@@ -323,10 +394,7 @@ ConduxClient.prototype = {
 	* @memberof ConduxClient
 	*/
 	disablePersistence(){
-		if(this._persistence.enabled){
-			this.sock.removeEventListener("close",this.reconnect.bind(this));
-			this._persistence.enabled = false;
-		}
+		this.updatePersistence({enabled: false});
 	},
 
 	/**
@@ -434,7 +502,7 @@ ConduxClient.ReactConnectMixin = {
 */
 function listenToFrequency(frequency,handlers){
 
-	if(typeOf(frequency) === "string") frequency = Singleton.band(frequency);
+	if(typeOf(frequency) === "string") frequency = Singleton.band[frequency];
 	if(!frequency || !frequency.__is_condux_frequency__){
 		throw new TypeError('first argument to "tuneInto" must be instance of Frequency');
 	}

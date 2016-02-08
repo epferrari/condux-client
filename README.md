@@ -22,8 +22,10 @@ ensuring the Condux server dispatch can perform its delegation in a reactive, un
 * [ConduxClient](#ConduxClient)
   * [new ConduxClient(url, persistence)](#new_ConduxClient_new)
   * _instance_
+    * [.persistence](#ConduxClient+persistence) ⇒ <code>object</code>
     * [.connecting](#ConduxClient+connecting) ⇒ <code>boolean</code>
     * [.connected](#ConduxClient+connected) ⇒ <code>boolean</code>
+    * [.updatePersistence()](#ConduxClient+updatePersistence) ⇒ <code>object</code>
     * [.connect()](#ConduxClient+connect)
     * [.reconnect()](#ConduxClient+reconnect)
     * [.createAction(actionName)](#ConduxClient+createAction) ⇒ <code>function</code>
@@ -52,13 +54,22 @@ create a Condux Client instance
 | persistence | <code>object</code> |  |  |
 | [persistence.enabled] | <code>boolean</code> | <code>true</code> | should <ConduxClient> automatically try to reconnect on websocket "close" event |
 | [persistence.attempts] | <code>number</code> | <code>10</code> | how many times should <ConduxClient> attempt to reconnect after losing connection. 		This happens inside <ConduxClient>.reconnect, which can be called independently of the websocket "close" event if necessary |
-| [persistence.interval] | <code>number</code> | <code>3000</code> | how long to wait between reconnection attempts, in milliseconds |
+| [persistence.interval] | <code>number</code> &#124; <code>function</code> | <code>3000</code> | how long to wait between reconnection attempts, in milliseconds. If passed a function, the function will be called with the number of reconnection attempts aleady made, and should return a number in milliseconds |
 | [persistence.onConnecting] | <code>function</code> | <code>noop</code> | called when <ConduxClient> begins a reconnection attempt |
 | [persistence.onConnection] | <code>function</code> | <code>noop</code> | called when <ConduxClient> establishes a connection to <ServerNexus> |
 | [persistence.onDisconnect] | <code>function</code> | <code>noop</code> | called when <ConduxClient> disconnects with a close event from websocket |
 | [persistence.onReconnect] | <code>function</code> | <code>noop</code> | called when <ConduxClient> re-establishes a connection to <ServerNexus> after being dropped |
 | [persistence.onTimeout] | <code>function</code> | <code>noop</code> | called when reconnection attempts are exhausted |
 
+
+-
+
+<a name="ConduxClient+persistence"></a>
+### conduxClient.persistence ⇒ <code>object</code>
+**Kind**: instance property of <code>[ConduxClient](#ConduxClient)</code>  
+**Returns**: <code>object</code> - current persistence options  
+**Read only**: true  
+**Since**: 0.4.2  
 
 -
 
@@ -79,6 +90,16 @@ is the <ConduxClient> currently connected to the Server
 **Kind**: instance property of <code>[ConduxClient](#ConduxClient)</code>  
 **Read only**: true  
 **Since**: 0.3.1  
+
+-
+
+<a name="ConduxClient+updatePersistence"></a>
+### conduxClient.updatePersistence() ⇒ <code>object</code>
+Update the current persistence options. If `<ConduxClient>` is connecting and the `onConnecting` hook was updated, it will immediately call the new onConnecting function
+
+**Kind**: instance method of <code>[ConduxClient](#ConduxClient)</code>  
+**Returns**: <code>object</code> - updated persistence options  
+**Since**: 0.4.2  
 
 -
 

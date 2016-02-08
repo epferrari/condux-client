@@ -181,7 +181,8 @@ function Frequency(topic,conduxClient,options){
 			// create a token to cache the resolver for when then the request receives a response,
 			// token is a randomly-generated id string, and when the server responds
 			// the resolver will be called with the response body
-			let token = this.__addResponseListener({
+			let token = uniqId();
+			let responseHandler = {
 				success: (token,body) => {
 					delete this._responseListeners_[token];
 					resolve(body);
@@ -190,15 +191,19 @@ function Frequency(topic,conduxClient,options){
 					delete this._responseListeners_[token];
 					reject(err);
 				}
-			});
+			};
+
+			this._responseListeners_[token] = responseHandler;
+
 			let req = {
 				request_token: token,
 				constraints: constraints
 			};
+
 			this.didConnect.then(() => {
 				// the connection was lost before the request went out
 				if(!this.isConnected){
-					reject('Frequency is no longer connected');
+					reject('Lost connection to Frequency');
 				}else{
 					conduxClient.joinAndSend("req",this.topic, JSON.stringify(req));
 				}
@@ -327,12 +332,6 @@ Frequency.prototype = {
 	*/
 	removeListener(token){
 		delete this._subscriptions_[token];
-	},
-
-	__addResponseListener(responseHandler){
-		var token = uniqId();
-		this._responseListeners_[token] = responseHandler;
-		return token;
 	},
 
 	/**
