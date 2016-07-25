@@ -207,7 +207,7 @@ ConduxClient.prototype = {
 					this.connect();
 
 					// re-subscribe all frequencies
-					_resubscribeFrequencies()
+					this._resubscribeFrequencies()
 
 					// re-apply the message handling multiplexer
 					this.sock.addEventListener("message",e => this._multiplex(e));
