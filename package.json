@@ -1,48 +1,48 @@
 {
-	"name": "condux-client",
-	"version": "0.4.3",
-	"description": "Client half of `condux`, an over-the-wire unidirectional data-flow architecture utilizing Reflux as the flux pattern implementation and SockJS as the websocket implementation.",
-	"main": "index.js",
-	"scripts": {
-		"test": "echo \"Error: no test specified\" && exit 1",
-		"lint": "eslint ./src",
-		"docs": "jsdoc2md ./lib/*.js  --global-index-format none --separators true > ./docs/API.md && cat ./docs/index.md ./docs/API.md > README.md",
-		"preclean": "npm run lint",
-		"clean": "rm -rf ./lib/*",
-		"prebuild": "npm run clean",
-		"build": "mkdir -p ./lib && babel ./src -d ./lib",
-		"postbuild": "npm run docs"
-	},
-	"repository": {
-		"type": "git",
-		"url": "git+https://epferrari@github.com/epferrari/condux-client.git"
-	},
-	"keywords": [
-		"reflux",
-		"react",
-		"websocket",
-		"over-the-wire",
-		"reactive",
-		"unidirectional",
-		"sockjs",
-		"client"
-	],
-	"author": "Ethan Ferrari",
-	"license": "MIT",
-	"bugs": {
-		"url": "https://github.com/epferrari/condux-client/issues"
-	},
-	"homepage": "https://github.com/epferrari/condux-client#readme",
-	"devDependencies": {
-		"babel": "^5.8.21",
-		"babel-eslint": "^4.0.10",
-		"dmd": "^1.1.1",
-		"docco": "^0.7.0",
-		"eslint": "^1.1.0",
-		"jsdoc-to-markdown": "^1.1.1"
-	},
-	"dependencies": {
-		"bluebird": "^2.10.0",
-		"sockjs-client": "^1.0.3"
-	}
+  "name": "condux-client",
+  "version": "0.4.4",
+  "description": "Client half of `condux`, an over-the-wire unidirectional data-flow architecture utilizing Reflux as the flux pattern implementation and SockJS as the websocket implementation.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "lint": "eslint ./src",
+    "docs": "jsdoc2md ./lib/*.js  --global-index-format none --separators true > ./docs/API.md && cat ./docs/index.md ./docs/API.md > README.md",
+    "preclean": "npm run lint",
+    "clean": "rm -rf ./lib/*",
+    "prebuild": "npm run clean",
+    "build": "mkdir -p ./lib && babel ./src -d ./lib",
+    "postbuild": "npm run docs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://epferrari@github.com/epferrari/condux-client.git"
+  },
+  "keywords": [
+    "reflux",
+    "react",
+    "websocket",
+    "over-the-wire",
+    "reactive",
+    "unidirectional",
+    "sockjs",
+    "client"
+  ],
+  "author": "Ethan Ferrari",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/epferrari/condux-client/issues"
+  },
+  "homepage": "https://github.com/epferrari/condux-client#readme",
+  "devDependencies": {
+    "babel": "^5.8.21",
+    "babel-eslint": "^4.0.10",
+    "dmd": "^1.1.1",
+    "docco": "^0.7.0",
+    "eslint": "^1.1.0",
+    "jsdoc-to-markdown": "^1.1.1"
+  },
+  "dependencies": {
+    "bluebird": "^2.10.0",
+    "sockjs-client": "^1.0.3"
+  }
 }
