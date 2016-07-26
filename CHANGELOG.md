@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## 0.4.3
+
+- fixed `_resubscribeFrequencies is undefined` error on reconnection
+
 ## 0.4.2
 
 - added `persistence` getter to `<ConduxClient>` instance

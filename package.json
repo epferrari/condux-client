@@ -1,6 +1,6 @@
 {
 	"name": "condux-client",
-	"version": "0.4.2",
+	"version": "0.4.3",
 	"description": "Client half of `condux`, an over-the-wire unidirectional data-flow architecture utilizing Reflux as the flux pattern implementation and SockJS as the websocket implementation.",
 	"main": "index.js",
 	"scripts": {
