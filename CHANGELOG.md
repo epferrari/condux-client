@@ -1,8 +1,12 @@
 # CHANGELOG
 
-## 0.4.3
+## 0.4.4
 
 - fixed `_resubscribeFrequencies is undefined` error on reconnection
+
+## 0.4.3
+
+- botched release without building lib first
 
 ## 0.4.2
 
